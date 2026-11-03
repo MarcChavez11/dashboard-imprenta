@@ -1,4 +1,5 @@
 import os
+import re
 import threading
 from datetime import datetime, time as dtime
  
@@ -10,7 +11,7 @@ import numpy as np
 from openpyxl import load_workbook
  
 # ----------------------------------------------------------------------
-# CONFIGURACIÓN - CONFIGURACION - Base de datos
+# CONFIGURACIÓN - Base de datos
 # ----------------------------------------------------------------------
 ARCHIVO = "Datos.xlsx"   # Base de datos (debe estar junto a este archivo)
 REFRESCO = 5             # Cada cuántos segundos se actualizan las pantallas
@@ -37,11 +38,47 @@ def obtener_candado():
  
  
 def _convertir_a_minutos(t):
-    try:
+    """Convierte las horas guardadas en Excel a minutos numéricos."""
+    if hasattr(t, "hour"):
         return t.hour * 60 + t.minute + t.second / 60
-    except Exception:
-        partes = str(t).split(':')
+
+    partes = str(t).split(":")
+    if len(partes) == 3:  # Excel: horas:minutos:segundos
         return int(partes[0]) * 60 + int(partes[1]) + float(partes[2]) / 60
+    if len(partes) == 2:  # Texto opcional: minutos:segundos
+        return int(partes[0]) + float(partes[1]) / 60
+    raise ValueError(f"Formato de tiempo no reconocido en Excel: {t}")
+
+
+def convertir_tiempo_ingresado(texto):
+    """Convierte '4:30' a 4.5 minutos para los cálculos estadísticos."""
+    coincidencia = re.fullmatch(r"\s*(\d+):([0-5]\d)\s*", texto)
+    if not coincidencia:
+        raise ValueError("Escribe el tiempo como minutos:segundos. Ejemplo: 4:30.")
+
+    minutos = int(coincidencia.group(1))
+    segundos = int(coincidencia.group(2))
+    total_segundos = minutos * 60 + segundos
+    if not 0 < total_segundos < 24 * 60 * 60:
+        raise ValueError("El tiempo debe ser mayor que 0 y menor que 24 horas.")
+    return total_segundos / 60
+
+
+def mostrar_tiempo(minutos_decimales):
+    """Muestra minutos numéricos como m:ss, sin alterar los datos originales."""
+    if pd.isna(minutos_decimales):
+        return ""
+    total_segundos = round(float(minutos_decimales) * 60)
+    signo = "-" if total_segundos < 0 else ""
+    m, s = divmod(abs(total_segundos), 60)
+    return f"{signo}{m}:{s:02d}"
+
+
+def tabla_tiempos_legibles(df):
+    """Vista de tabla para Susana; conserva la columna numérica en el df original."""
+    vista = df[['GRUPO DE SERVICIO', 'SERVICIO', 'Minutos', 'SEXO', 'SATISFACCION']].copy()
+    vista['Minutos'] = vista['Minutos'].apply(mostrar_tiempo)
+    return vista.rename(columns={'Minutos': 'TIEMPO (min:ss)'})
  
  
 @st.cache_data
@@ -115,10 +152,13 @@ def vista_registro():
                          ["Grupo 1 (Copias/Impresiones)", "Grupo 2 (Trámites/Pasaporte)"])
         servicio = st.text_input("¿Qué servicio exacto fue? (Ej. Copia, Foto, Pasaporte)")
         sexo = st.radio("Sexo del cliente:", ["F", "M"], horizontal=True)
-        tiempo = st.number_input("¿Cuántos minutos demoró en total?",
-                                 min_value=0.1, value=1.0, step=0.5)
-        satisfaccion = st.radio("¿El cliente se fue contento con el servicio?",
-                                ["Sí, OPTIMO 😊", "No hubo molestias 😞"])
+        tiempo = st.text_input(
+            "¿Cuánto demoró la atención? (min:ss)",
+            value="1:00",
+            help="Escribe los minutos y segundos. Por ejemplo, 4:30 equivale a 4 minutos y 30 segundos."
+        )
+        satisfaccion = st.radio("¿El cliente quedó satisfecho con el servicio?",
+                                ["Sí, ÓPTIMO 😊", "No, hubo molestias 😞"])
         enviar = st.form_submit_button("Guardar en el sistema ✔️", use_container_width=True)
  
     if enviar:
@@ -127,10 +167,12 @@ def vista_registro():
                 grupo=1 if "Grupo 1" in grupo else 2,
                 servicio=servicio.strip() if servicio.strip() else "Varios",
                 sexo=sexo,
-                minutos=tiempo,
-                satisfaccion='OPTIMO' if "Sí" in satisfaccion else 'REGULAR',
+                minutos=convertir_tiempo_ingresado(tiempo),
+                satisfaccion='OPTIMO' if satisfaccion.startswith("Sí") else 'REGULAR',
             )
             st.success("¡Listo! Registro guardado. El dashboard y el análisis se actualizan solos.")
+        except ValueError as e:
+            st.error(str(e))
         except PermissionError:
             st.error("No se pudo guardar: el Excel está abierto en otro programa. "
                      "Ciérralo e inténtalo de nuevo.")
@@ -147,7 +189,7 @@ def mostrar_ultimos():
     df = cargar_datos()
     st.caption(f"Total de clientes registrados: {len(df)}")
     st.dataframe(
-        df[['GRUPO DE SERVICIO', 'SERVICIO', 'Minutos', 'SEXO', 'SATISFACCION']].tail(5).iloc[::-1],
+        tabla_tiempos_legibles(df).tail(5).iloc[::-1],
         use_container_width=True,
     )
  
@@ -162,21 +204,32 @@ def vista_dashboard():
     st.caption(f"🔄 Actualización automática cada {REFRESCO} s · "
                f"Última lectura: {datetime.now().strftime('%H:%M:%S')}")
  
+    if df.empty:
+        st.info("Todavía no hay registros para analizar.")
+        return
+
     tiempo_promedio = df['Minutos'].mean()
     felices = int(es_optimo(df['SATISFACCION']).sum())
     porcentaje_felices = felices / len(df) * 100
  
     col1, col2, col3 = st.columns(3)
     col1.metric("Clientes atendidos", len(df))
-    col2.metric("Tiempo Promedio General", f"{tiempo_promedio:.2f} min")
+    col2.metric("Tiempo Promedio General", f"{mostrar_tiempo(tiempo_promedio)} min:seg")
     col3.metric("Clientes Felices", f"{porcentaje_felices:.0f}%")
     st.divider()
  
     st.subheader("Comparación por Grupo de Servicio")
     df_grupos = df.groupby('GRUPO DE SERVICIO')['Minutos'].mean().reset_index()
     df_grupos['GRUPO DE SERVICIO'] = "Grupo " + df_grupos['GRUPO DE SERVICIO'].astype(int).astype(str)
+    df_grupos['Tiempo legible'] = df_grupos['Minutos'].apply(mostrar_tiempo)
     fig1 = px.bar(df_grupos, x='GRUPO DE SERVICIO', y='Minutos',
-                  color='GRUPO DE SERVICIO', text_auto='.2f')
+                  color='GRUPO DE SERVICIO', text='Tiempo legible',
+                  custom_data=['Tiempo legible'])
+    fig1.update_traces(
+        textposition='outside',
+        hovertemplate='Tiempo promedio: %{customdata[0]} (min:seg)<extra></extra>'
+    )
+    fig1.update_yaxes(title_text='Tiempo promedio (minutos)', tickformat='.0f')
     st.plotly_chart(fig1, use_container_width=True)
  
  
@@ -216,7 +269,7 @@ def vista_inferencial():
     ci_prop = (lo * 100, hi * 100)
  
     st.info(f"🕒 Con 95% de confianza, el **tiempo promedio real** de la imprenta se encuentra "
-            f"entre **{ci_time[0]:.2f} y {ci_time[1]:.2f} minutos**.")
+            f"entre **{mostrar_tiempo(ci_time[0])} y {mostrar_tiempo(ci_time[1])} min:seg**.")
     st.info(f"😊 Con 95% de confianza, la **proporción real de satisfacción** se encuentra "
             f"entre **{ci_prop[0]:.2f}% y {ci_prop[1]:.2f}%**.")
  
@@ -249,7 +302,8 @@ def vista_inferencial():
             concl = "el Grupo 2 es más rápido."
         else:
             concl = "el intervalo incluye el 0: no hay diferencia significativa."
-        st.success(f"⚖️ Diferencia de tiempos (G1 - G2): **[{ci_m[0]:.2f}, {ci_m[1]:.2f}] min**. {concl}")
+        st.success(f"⚖️ Diferencia de tiempos (G1 - G2): "
+                   f"**[{mostrar_tiempo(ci_m[0])}, {mostrar_tiempo(ci_m[1])}] min:seg**. {concl}")
  
         # Diferencia de proporciones (Newcombe, basado en Wilson)
         k1 = int(es_optimo(g1['SATISFACCION']).sum())
@@ -313,7 +367,7 @@ def vista_excel():
     df = cargar_datos()
     st.caption(f"🔄 Actualización automática cada {REFRESCO} s · "
                f"{len(df)} registros · Última lectura: {datetime.now().strftime('%H:%M:%S')}")
-    st.dataframe(df, use_container_width=True)
+    st.dataframe(tabla_tiempos_legibles(df), use_container_width=True)
  
     with open(ARCHIVO, "rb") as f:
         st.download_button("⬇️ Descargar Excel", f.read(), file_name="Datos.xlsx",
