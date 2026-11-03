@@ -10,7 +10,7 @@ import numpy as np
 from openpyxl import load_workbook
  
 # ----------------------------------------------------------------------
-# CONFIGURACIÓN
+# CONFIGURACIÓN - CONFIGURACION - Base de datos
 # ----------------------------------------------------------------------
 ARCHIVO = "Datos.xlsx"   # Base de datos (debe estar junto a este archivo)
 REFRESCO = 5             # Cada cuántos segundos se actualizan las pantallas
