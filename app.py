@@ -10,7 +10,7 @@ import numpy as np
 from openpyxl import load_workbook
 
 # ----------------------------------------------------------------------
-# CONFIGURACIÓN - CONFIGURACION - Base de datos
+# CONFIGURACIÓN - Base de datos
 # ----------------------------------------------------------------------
 ARCHIVO = "Datos.xlsx"   # Base de datos (debe estar junto a este archivo)
 REFRESCO = 5             # Cada cuántos segundos se actualizan las pantallas
@@ -18,53 +18,12 @@ REFRESCO = 5             # Cada cuántos segundos se actualizan las pantallas
 st.set_page_config(page_title="Imprenta Flores", layout="centered")
 
 st.sidebar.title("Imprenta Flores")
-
-# ----------------------------------------------------------------------
-# COMPONENTE: SEMÁFORO GLOBAL EN LA BARRA LATERAL
-# ----------------------------------------------------------------------
-def mostrar_semaforo_sidebar():
-    """Muestra un semáforo general y actualizado en la barra lateral."""
-    try:
-        df_temp = cargar_datos()
-        if len(df_temp) > 0:
-            t_prom = df_temp['Minutos'].mean()
-            tiempo_ideal = 5.0
-            tolerancia = 1.2
-            umbral_amarillo = tiempo_ideal * tolerancia
-
-            st.sidebar.markdown("---")
-            st.sidebar.markdown("### 🚦 Estado del Negocio")
-            
-            if t_prom <= tiempo_ideal:
-                st.sidebar.success(
-                    f"**🟢 ÓPTIMO**\n\n"
-                    f"Promedio: **{t_prom:.1f} min**\n\n"
-                    f"¡Excelente ritmo! Estamos cumpliendo la meta (≤ {tiempo_ideal:.0f} min)."
-                )
-            elif t_prom <= umbral_amarillo:
-                st.sidebar.warning(
-                    f"**🟡 PRECAUCIÓN**\n\n"
-                    f"Promedio: **{t_prom:.1f} min**\n\n"
-                    f"Los tiempos subieron un poco. Conviene agilizar la atención."
-                )
-            else:
-                st.sidebar.error(
-                    f"**🔴 DEMORADO**\n\n"
-                    f"Promedio: **{t_prom:.1f} min**\n\n"
-                    f"¡Alerta! Los tiempos son muy altos (> {umbral_amarillo:.0f} min)."
-                )
-    except Exception:
-        pass
-
 menu = st.sidebar.radio("¿Qué deseas hacer?", [
     "⏱️ Registrar un cliente",
     "📊 Dashboard Descriptivo",
     "📈 Análisis Inferencial",
     "🛠️ Modo Ingeniero (Ver Excel)"
 ])
-
-# Ejecutamos el semáforo global en la barra lateral
-mostrar_semaforo_sidebar()
 
 
 # ----------------------------------------------------------------------
@@ -146,6 +105,58 @@ def es_optimo(serie):
 
 
 # ----------------------------------------------------------------------
+# COMPONENTE VISUAL: SEMÁFORO DE 3 LUCES (1 ENCENDIDA, 2 APAGADAS)
+# ----------------------------------------------------------------------
+def mostrar_semaforo_visual(tiempo_promedio, tiempo_ideal=5.0, tolerancia=1.2):
+    """
+    Renderiza un semáforo visual con 3 luces utilizando HTML/CSS dentro de Streamlit.
+    """
+    umbral_amarillo = tiempo_ideal * tolerancia
+
+    # Determinar estado
+    if tiempo_promedio <= tiempo_ideal:
+        estado = "verde"
+        titulo = "🟢 ESTADO ÓPTIMO"
+        desc = f"El tiempo promedio (**{tiempo_promedio:.2f} min**) cumple perfectamente con la meta (≤ {tiempo_ideal:.1f} min)."
+    elif tiempo_promedio <= umbral_amarillo:
+        estado = "amarillo"
+        titulo = "🟡 ESTADO DE PRECAUCIÓN"
+        desc = f"El tiempo promedio (**{tiempo_promedio:.2f} min**) excede un poco la meta ideal, manteniéndose en zona de precaución."
+    else:
+        estado = "rojo"
+        titulo = "🔴 ESTADO CRÍTICO (DEMORADO)"
+        desc = f"El tiempo promedio (**{tiempo_promedio:.2f} min**) supera el límite aceptable. Se requiere optimizar procesos."
+
+    # Estilos de luces (encendida vs apagada)
+    c_rojo = "#ff4d4d" if estado == "rojo" else "#4d1a1a"
+    op_rojo = "1" if estado == "rojo" else "0.3"
+
+    c_amarillo = "#ffcc00" if estado == "amarillo" else "#4d4d00"
+    op_amarillo = "1" if estado == "amarillo" else "0.3"
+
+    c_verde = "#2ecc71" if estado == "verde" else "#143d21"
+    op_verde = "1" if estado == "verde" else "0.3"
+
+    # Maquetación visual en HTML
+    html_semaforo = f"""
+    <div style="background-color: #1e1e1e; padding: 20px; border-radius: 12px; border: 1px solid #333; margin-bottom: 20px; display: flex; align-items: center; justify-content: space-around;">
+        <div style="text-align: center;">
+            <div style="display: flex; gap: 12px; background: #111; padding: 10px 18px; border-radius: 30px; border: 2px solid #444; box-shadow: inset 0 0 10px rgba(0,0,0,0.8);">
+                <div style="width: 30px; height: 30px; background-color: {c_rojo}; opacity: {op_rojo}; border-radius: 50%; box-shadow: 0 0 { '15px ' + c_rojo if estado=='rojo' else 'none'};"></div>
+                <div style="width: 30px; height: 30px; background-color: {c_amarillo}; opacity: {op_amarillo}; border-radius: 50%; box-shadow: 0 0 { '15px ' + c_amarillo if estado=='amarillo' else 'none'};"></div>
+                <div style="width: 30px; height: 30px; background-color: {c_verde}; opacity: {op_verde}; border-radius: 50%; box-shadow: 0 0 { '15px ' + c_verde if estado=='verde' else 'none'};"></div>
+            </div>
+        </div>
+        <div style="flex-grow: 1; margin-left: 20px;">
+            <h4 style="margin: 0 0 5px 0; color: #fff; font-size: 18px;">{titulo}</h4>
+            <p style="margin: 0; color: #ccc; font-size: 14px;">{desc}</p>
+        </div>
+    </div>
+    """
+    st.markdown(html_semaforo, unsafe_allow_html=True)
+
+
+# ----------------------------------------------------------------------
 # PANTALLA 1: REGISTRO
 # ----------------------------------------------------------------------
 def vista_registro():
@@ -206,6 +217,9 @@ def vista_dashboard():
     tiempo_promedio = df['Minutos'].mean()
     felices = int(es_optimo(df['SATISFACCION']).sum())
     porcentaje_felices = felices / len(df) * 100
+
+    # --- LLAMADA AL SEMÁFORO VISUAL DE 3 LUCES ---
+    mostrar_semaforo_visual(tiempo_promedio=tiempo_promedio, tiempo_ideal=5.0)
 
     col1, col2, col3 = st.columns(3)
     col1.metric("Clientes atendidos", len(df))
