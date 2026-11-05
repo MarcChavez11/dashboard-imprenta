@@ -295,12 +295,12 @@ def vista_inferencial():
             ci_m = (diff_mean, diff_mean)
 
         if ci_m[1] < 0:
-            concl = "El **Grupo 1** es significativamente más rápido."
+            concl = "El **Grupo 1**, correspondiente a Servicios de atención rápida es significativamente más rápido."
         elif ci_m[0] > 0:
-            concl = "El **Grupo 2** es significativamente más rápido."
+            concl = "El **Grupo 2** correspondiente a Servicios de gestión documental es significativamente más rápido."
         else:
             concl = "No hay una diferencia de velocidad importante entre ambos grupos."
-        st.success(f"⚖️ **Diferencia de tiempos (G1 vs G2):** [{ci_m[0]:.2f}, {ci_m[1]:.2f}] min. {concl}")
+        st.success(f"⚖️ **Diferencia de tiempos (G1 vs G2):** Entre {ci_m[0]:.2f} a {ci_m[1]:.2f}] min. {concl}")
 
         k1 = int(es_optimo(g1['SATISFACCION']).sum())
         k2 = int(es_optimo(g2['SATISFACCION']).sum())
@@ -310,7 +310,7 @@ def vista_inferencial():
         dp = p1 - p2
         ci_p = (dp - np.sqrt((p1 - l1)**2 + (u2 - p2)**2),
                 dp + np.sqrt((u1 - p1)**2 + (p2 - l2)**2))
-        st.success(f"⚖️ **Diferencia de satisfacción:** El margen de diferencia en clientes felices entre G1 y G2 es de **[{ci_p[0] * 100:.1f}%, {ci_p[1] * 100:.1f}%]**.")
+        st.success(f"⚖️ **Diferencia de satisfacción entre **Servicios de atención rápida y Servicios de gestión documental:** El margen de diferencia en clientes felices está entre **{ci_p[0] * 100:.1f}% {ci_p[1] * 100:.1f}%]**.")
 
         if min(n1, n2) < 10:
             st.warning(f"⚠️ Precaución: Un grupo tiene pocos datos ({min(n1, n2)} registros). Se recomienda registrar más atenciones para mayor precisión.")
