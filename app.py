@@ -18,12 +18,53 @@ REFRESCO = 5             # Cada cuántos segundos se actualizan las pantallas
 st.set_page_config(page_title="Imprenta Flores", layout="centered")
 
 st.sidebar.title("Imprenta Flores")
+
+# ----------------------------------------------------------------------
+# COMPONENTE: SEMÁFORO GLOBAL EN LA BARRA LATERAL
+# ----------------------------------------------------------------------
+def mostrar_semaforo_sidebar():
+    """Muestra un semáforo general y actualizado en la barra lateral."""
+    try:
+        df_temp = cargar_datos()
+        if len(df_temp) > 0:
+            t_prom = df_temp['Minutos'].mean()
+            tiempo_ideal = 5.0
+            tolerancia = 1.2
+            umbral_amarillo = tiempo_ideal * tolerancia
+
+            st.sidebar.markdown("---")
+            st.sidebar.markdown("### 🚦 Estado del Negocio")
+            
+            if t_prom <= tiempo_ideal:
+                st.sidebar.success(
+                    f"**🟢 ÓPTIMO**\n\n"
+                    f"Promedio: **{t_prom:.1f} min**\n\n"
+                    f"¡Excelente ritmo! Estamos cumpliendo la meta (≤ {tiempo_ideal:.0f} min)."
+                )
+            elif t_prom <= umbral_amarillo:
+                st.sidebar.warning(
+                    f"**🟡 PRECAUCIÓN**\n\n"
+                    f"Promedio: **{t_prom:.1f} min**\n\n"
+                    f"Los tiempos subieron un poco. Conviene agilizar la atención."
+                )
+            else:
+                st.sidebar.error(
+                    f"**🔴 DEMORADO**\n\n"
+                    f"Promedio: **{t_prom:.1f} min**\n\n"
+                    f"¡Alerta! Los tiempos son muy altos (> {umbral_amarillo:.0f} min)."
+                )
+    except Exception:
+        pass
+
 menu = st.sidebar.radio("¿Qué deseas hacer?", [
     "⏱️ Registrar un cliente",
     "📊 Dashboard Descriptivo",
     "📈 Análisis Inferencial",
     "🛠️ Modo Ingeniero (Ver Excel)"
 ])
+
+# Ejecutamos el semáforo global en la barra lateral
+mostrar_semaforo_sidebar()
 
 
 # ----------------------------------------------------------------------
@@ -105,38 +146,6 @@ def es_optimo(serie):
 
 
 # ----------------------------------------------------------------------
-# COMPONENTE: SISTEMA DE SEMÁFORO DIDÁCTICO
-# ----------------------------------------------------------------------
-def mostrar_semaforo(tiempo_promedio, tiempo_ideal=5.0, tolerancia=1.2):
-    """
-    Muestra una alerta/tarjeta didáctica de semáforo según el tiempo promedio:
-    - VERDE: <= tiempo_ideal (Eficiencia óptima)
-    - AMARILLO: > tiempo_ideal y <= (tiempo_ideal * tolerancia) (Precaución)
-    - ROJO: > (tiempo_ideal * tolerancia) (Tiempos altos)
-    """
-    umbral_amarillo = tiempo_ideal * tolerancia
-
-    if tiempo_promedio <= tiempo_ideal:
-        st.success(
-            f"🟢 **ESTADO VERDE — TIEMPOS ÓPTIMOS**\n\n"
-            f"El tiempo promedio actual (**{tiempo_promedio:.2f} min**) está dentro del objetivo ideal "
-            f"(≤ {tiempo_ideal:.1f} min). ¡Excelente atención al cliente!"
-        )
-    elif tiempo_promedio <= umbral_amarillo:
-        st.warning(
-            f"🟡 **ESTADO AMARILLO — PRECAUCIÓN**\n\n"
-            f"El tiempo promedio actual (**{tiempo_promedio:.2f} min**) excede ligeramente el objetivo ideal "
-            f"({tiempo_ideal:.1f} min), pero se mantiene bajo el límite de alerta ({umbral_amarillo:.1f} min)."
-        )
-    else:
-        st.error(
-            f"🔴 **ESTADO ROJO — TIEMPOS ALTOS**\n\n"
-            f"El tiempo promedio actual (**{tiempo_promedio:.2f} min**) excede el umbral crítico "
-            f"({umbral_amarillo:.1f} min). Se requiere revisar la atención y optimizar procesos."
-        )
-
-
-# ----------------------------------------------------------------------
 # PANTALLA 1: REGISTRO
 # ----------------------------------------------------------------------
 def vista_registro():
@@ -198,10 +207,6 @@ def vista_dashboard():
     felices = int(es_optimo(df['SATISFACCION']).sum())
     porcentaje_felices = felices / len(df) * 100
 
-    # --- SISTEMA DE SEMÁFORO AL INICIO ---
-    mostrar_semaforo(tiempo_promedio=tiempo_promedio, tiempo_ideal=5.0)
-    st.divider()
-
     col1, col2, col3 = st.columns(3)
     col1.metric("Clientes atendidos", len(df))
     col2.metric("Tiempo Promedio General", f"{tiempo_promedio:.2f} min")
@@ -221,7 +226,7 @@ def vista_dashboard():
 # ----------------------------------------------------------------------
 @st.fragment(run_every=REFRESCO)
 def vista_inferencial():
-    st.title("Inferencia Estadística (95% Confianza)")
+    st.title("Análisis Estadístico del Negocio")
     st.caption(f"🔄 Actualización automática cada {REFRESCO} s · "
                f"Última lectura: {datetime.now().strftime('%H:%M:%S')}")
 
@@ -229,12 +234,12 @@ def vista_inferencial():
     n_total = len(df)
 
     if n_total < 2:
-        st.warning("Se necesitan al menos 2 registros para hacer inferencia.")
+        st.warning("Se necesitan al menos 2 registros para hacer el análisis.")
         return
 
     # ---------------- OBJETIVO 1 ----------------
-    st.subheader("Objetivo 1: Estimación de la Población")
-    st.write("(Intervalos de confianza para la media y proporción general)")
+    st.subheader("1. Estimación General del Servicio")
+    st.write("Confiabilidad estadística basada en las atenciones actuales:")
 
     mean_time = df['Minutos'].mean()
     std_time = df['Minutos'].std()
@@ -246,21 +251,18 @@ def vista_inferencial():
 
     felices = int(es_optimo(df['SATISFACCION']).sum())
 
-    # Clopper-Pearson (exacto): válido incluso con p̂ = 0 o 1
     lo = stats.beta.ppf(0.025, felices, n_total - felices + 1) if felices > 0 else 0.0
     hi = stats.beta.ppf(0.975, felices + 1, n_total - felices) if felices < n_total else 1.0
     ci_prop = (lo * 100, hi * 100)
 
-    st.info(f"🕒 Con 95% de confianza, el **tiempo promedio real** de la imprenta se encuentra "
-            f"entre **{ci_time[0]:.2f} y {ci_time[1]:.2f} minutos**.")
-    st.info(f"😊 Con 95% de confianza, la **proporción real de satisfacción** se encuentra "
-            f"entre **{ci_prop[0]:.2f}% y {ci_prop[1]:.2f}%**.")
+    st.info(f"🕒 **Tiempo de atención:** Con un 95% de seguridad, el tiempo real promedio por cliente se encuentra entre **{ci_time[0]:.2f} y {ci_time[1]:.2f} minutos**.")
+    st.info(f"😊 **Satisfacción del cliente:** Con un 95% de seguridad, el porcentaje real de clientes satisfechos está entre **{ci_prop[0]:.2f}% y {ci_prop[1]:.2f}%**.")
 
     st.divider()
 
     # ---------------- OBJETIVO 2 ----------------
-    st.subheader("Objetivo 2: Comparación de Grupos")
-    st.write("(Intervalos de confianza para diferencia de medias y proporciones)")
+    st.subheader("2. Comparación entre Grupos de Servicio")
+    st.write("Evaluando cuál grupo de servicio rinde mejor:")
 
     g1 = df[df['GRUPO DE SERVICIO'] == 1]
     g2 = df[df['GRUPO DE SERVICIO'] == 2]
@@ -269,7 +271,6 @@ def vista_inferencial():
         n1, n2 = len(g1), len(g2)
         v1, v2 = g1['Minutos'].var(), g2['Minutos'].var()
 
-        # Diferencia de medias (Welch + t de Student)
         diff_mean = g1['Minutos'].mean() - g2['Minutos'].mean()
         se_diff = np.sqrt(v1 / n1 + v2 / n2)
         if se_diff > 0:
@@ -280,14 +281,13 @@ def vista_inferencial():
             ci_m = (diff_mean, diff_mean)
 
         if ci_m[1] < 0:
-            concl = "el Grupo 1 es más rápido."
+            concl = "El **Grupo 1** es significativamente más rápido."
         elif ci_m[0] > 0:
-            concl = "el Grupo 2 es más rápido."
+            concl = "El **Grupo 2** es significativamente más rápido."
         else:
-            concl = "el intervalo incluye el 0: no hay diferencia significativa."
-        st.success(f"⚖️ Diferencia de tiempos (G1 - G2): **[{ci_m[0]:.2f}, {ci_m[1]:.2f}] min**. {concl}")
+            concl = "No hay una diferencia de velocidad importante entre ambos grupos."
+        st.success(f"⚖️ **Diferencia de tiempos (G1 vs G2):** [{ci_m[0]:.2f}, {ci_m[1]:.2f}] min. {concl}")
 
-        # Diferencia de proporciones (Newcombe, basado en Wilson)
         k1 = int(es_optimo(g1['SATISFACCION']).sum())
         k2 = int(es_optimo(g2['SATISFACCION']).sum())
         p1, p2 = k1 / n1, k2 / n2
@@ -296,48 +296,40 @@ def vista_inferencial():
         dp = p1 - p2
         ci_p = (dp - np.sqrt((p1 - l1)**2 + (u2 - p2)**2),
                 dp + np.sqrt((u1 - p1)**2 + (p2 - l2)**2))
-        st.success(f"⚖️ Diferencia de satisfacción (G1 - G2): "
-                   f"**[{ci_p[0] * 100:.1f}%, {ci_p[1] * 100:.1f}%]**.")
+        st.success(f"⚖️ **Diferencia de satisfacción:** El margen de diferencia en clientes felices entre G1 y G2 es de **[{ci_p[0] * 100:.1f}%, {ci_p[1] * 100:.1f}%]**.")
 
         if min(n1, n2) < 10:
-            st.warning(f"⚠️ Un grupo tiene solo {min(n1, n2)} datos: los intervalos son poco "
-                       f"confiables. Registra más clientes.")
+            st.warning(f"⚠️ Precaución: Un grupo tiene pocos datos ({min(n1, n2)} registros). Se recomienda registrar más atenciones para mayor precisión.")
     else:
-        st.warning("Se necesitan al menos 2 datos en cada grupo para comparar.")
+        st.warning("Se necesitan al menos 2 datos en cada grupo para hacer comparaciones.")
 
     st.divider()
 
     # ---------------- OBJETIVO 3 ----------------
-    st.subheader("Objetivo 3: Pruebas de Hipótesis (Niveles de Referencia)")
-    st.write("(Comprobar si se cumplen los niveles de eficiencia y satisfacción)")
+    st.subheader("3. Evaluación de Metas del Negocio")
+    st.write("Verificación frente a los estándares esperados:")
 
     col_a, col_b = st.columns(2)
-    ref_tiempo = col_a.number_input("Eficiencia: Tiempo esperado (min)",
+    ref_tiempo = col_a.number_input("Meta máxima de tiempo esperada (min)",
                                     value=6.0, step=0.5, key="ref_tiempo")
-    ref_sat = col_b.number_input("Satisfacción: Meta mínima (%)",
+    ref_sat = col_b.number_input("Meta mínima de satisfacción (%)",
                                  value=90, step=5, key="ref_sat")
 
-    # Prueba de media (t de Student, H1: mu < ref)
     if std_time > 0:
         _, p_val = stats.ttest_1samp(df['Minutos'], ref_tiempo, alternative='less')
         if p_val < 0.05:
-            st.success(f"🟢 **Tiempo:** Se aprueba la eficiencia. El tiempo es estadísticamente "
-                       f"menor a {ref_tiempo} min (p-value: {p_val:.4f}).")
+            st.success(f"🟢 **Meta de Tiempo Cumplida:** El tiempo promedio está por debajo de los {ref_tiempo} min establecidos (Demostrado estadísticamente).")
         else:
-            st.error(f"🔴 **Tiempo:** No se aprueba la eficiencia. No hay evidencia de que sea "
-                     f"menor a {ref_tiempo} min (p-value: {p_val:.4f}).")
+            st.error(f"🔴 **Meta de Tiempo No Superada:** Todavía no hay evidencia suficiente de que estemos por debajo de los {ref_tiempo} min.")
     else:
-        st.warning("Todos los tiempos son iguales; no se puede hacer la prueba de media.")
+        st.warning("No hay suficiente variación de datos para probar la media.")
 
-    # Prueba de proporción (binomial exacta, H1: p > p0)
     p_0 = ref_sat / 100
     p_val_prop = stats.binomtest(felices, n_total, p_0, alternative='greater').pvalue
     if p_val_prop < 0.05:
-        st.success(f"🟢 **Satisfacción:** La proporción de clientes felices es estadísticamente "
-                   f"mayor al {ref_sat}% (p-value: {p_val_prop:.4f}).")
+        st.success(f"🟢 **Meta de Satisfacción Cumplida:** Superamos con éxito la meta del {ref_sat}% de clientes felices.")
     else:
-        st.error(f"🔴 **Satisfacción:** No hay evidencia suficiente para afirmar que se supera "
-                 f"la meta del {ref_sat}% (p-value: {p_val_prop:.4f}).")
+        st.error(f"🔴 **Meta de Satisfacción No Alcanzada:** Aún no alcanzamos consistentemente la meta del {ref_sat}% de satisfacción.")
 
 
 # ----------------------------------------------------------------------
