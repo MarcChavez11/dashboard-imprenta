@@ -310,7 +310,7 @@ def vista_inferencial():
         dp = p1 - p2
         ci_p = (dp - np.sqrt((p1 - l1)**2 + (u2 - p2)**2),
                 dp + np.sqrt((u1 - p1)**2 + (p2 - l2)**2))
-        st.success(f"⚖️ **Diferencia de satisfacción entre **Servicios de atención rápida y Servicios de gestión documental:** El margen de diferencia en clientes felices está entre **{ci_p[0] * 100:.1f}% {ci_p[1] * 100:.1f}%]**.")
+        st.success(f"⚖️ **Diferencia de satisfacción entre **Servicios de atención rápida y Servicios de gestión documental:** El margen de diferencia en clientes felices está entre **{ci_p[0] * 100:.1f}% y {ci_p[1] * 100:.1f}%**.")
 
         if min(n1, n2) < 10:
             st.warning(f"⚠️ Precaución: Un grupo tiene pocos datos ({min(n1, n2)} registros). Se recomienda registrar más atenciones para mayor precisión.")
