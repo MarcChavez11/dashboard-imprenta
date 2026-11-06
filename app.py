@@ -41,7 +41,7 @@ REF_TIEMPO = st.sidebar.number_input(
     key="ref_tiempo"
 )
 
-# Restringido: El porcentaje de satisfacción va estrictamente de 1% a 100%
+# Restringido: El porcentaje de satisfacción va de 1% a 100%
 REF_SAT = st.sidebar.number_input(
     "Meta mín. satisfacción (%)", 
     min_value=1, 
@@ -68,6 +68,16 @@ def _convertir_a_minutos(t):
     except Exception:
         partes = str(t).split(':')
         return int(partes[0]) * 60 + int(partes[1]) + float(partes[2]) / 60
+
+
+def _formatear_minutos_a_mmss(minutos_decimal):
+    """Convierte un valor decimal de minutos a formato 'MM:SS' para mostrarse amigable."""
+    try:
+        total_segundos = int(round(float(minutos_decimal) * 60))
+        m, s = divmod(total_segundos, 60)
+        return f"{m:02d}:{s:02d}"
+    except Exception:
+        return str(minutos_decimal)
 
 
 @st.cache_data
@@ -221,10 +231,13 @@ def vista_registro():
 def mostrar_ultimos():
     df = cargar_datos()
     st.caption(f"Total de clientes registrados: {len(df)}")
-    st.dataframe(
-        df[['GRUPO DE SERVICIO', 'SERVICIO', 'Minutos', 'SEXO', 'SATISFACCION']].tail(5).iloc[::-1],
-        use_container_width=True,
-    )
+    
+    # Creamos una copia para mostrar los minutos formateados como MM:SS en la tabla visual
+    df_visual = df[['GRUPO DE SERVICIO', 'SERVICIO', 'Minutos', 'SEXO', 'SATISFACCION']].tail(5).iloc[::-1].copy()
+    df_visual['TIEMPO (MM:SS)'] = df_visual['Minutos'].apply(_formatear_minutos_a_mmss)
+    df_visual = df_visual[['GRUPO DE SERVICIO', 'SERVICIO', 'TIEMPO (MM:SS)', 'SEXO', 'SATISFACCION']]
+    
+    st.dataframe(df_visual, use_container_width=True)
 
 
 # ----------------------------------------------------------------------
@@ -245,15 +258,19 @@ def vista_dashboard():
 
     col1, col2, col3 = st.columns(3)
     col1.metric("Clientes atendidos", len(df))
-    col2.metric("Tiempo Promedio General", f"{tiempo_promedio:.2f} min")
+    col2.metric("Tiempo Promedio General", f"{_formatear_minutos_a_mmss(tiempo_promedio)} min")
     col3.metric("Clientes Felices", f"{porcentaje_felices:.0f}%")
     st.divider()
 
     st.subheader("Comparación por Grupo de Servicio")
     df_grupos = df.groupby('GRUPO DE SERVICIO')['Minutos'].mean().reset_index()
     df_grupos['GRUPO DE SERVICIO'] = "Grupo " + df_grupos['GRUPO DE SERVICIO'].astype(int).astype(str)
+    
+    # Agregamos texto formateado para las barras del gráfico
+    df_grupos['Tiempo_Texto'] = df_grupos['Minutos'].apply(_formatear_minutos_a_mmss)
+    
     fig1 = px.bar(df_grupos, x='GRUPO DE SERVICIO', y='Minutos',
-                  color='GRUPO DE SERVICIO', text_auto='.2f')
+                  color='GRUPO DE SERVICIO', text='Tiempo_Texto')
     st.plotly_chart(fig1, use_container_width=True)
 
 
@@ -291,7 +308,8 @@ def vista_inferencial():
     hi = stats.beta.ppf(0.975, felices + 1, n_total - felices) if felices < n_total else 1.0
     ci_prop = (lo * 100, hi * 100)
 
-    st.info(f"🕒 **Tiempo de atención:** Con un 95% de seguridad, el tiempo real promedio por cliente se encuentra entre **{ci_time[0]:.2f} y {ci_time[1]:.2f} minutos**.")
+    t_inf_str = f"{_formatear_minutos_a_mmss(ci_time[0])} a {_formatear_minutos_a_mmss(ci_time[1])}"
+    st.info(f"🕒 **Tiempo de atención:** Con un 95% de seguridad, el tiempo real promedio por cliente se encuentra entre **{t_inf_str} min**.")
     st.info(f"😊 **Satisfacción del cliente:** Con un 95% de seguridad, el porcentaje real de clientes satisfechos está entre **{ci_prop[0]:.2f}% y {ci_prop[1]:.2f}%**.")
 
     st.divider()
