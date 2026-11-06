@@ -203,7 +203,7 @@ def vista_registro():
         tiempo = st.number_input("¿Cuántos minutos demoró en total?",
                                  min_value=0.1, value=1.0, step=0.5)
         satisfaccion = st.radio("¿El cliente se fue contento con el servicio?",
-                                ["Sí, OPTIMO 😊", "No hubo molestias 😞"])
+                                ["Sí, OPTIMO 😊", "NO, hubo molestias 😞"])
         enviar = st.form_submit_button("Guardar en el sistema ✔️", use_container_width=True)
 
     if enviar:
