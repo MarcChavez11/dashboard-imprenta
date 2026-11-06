@@ -25,6 +25,15 @@ menu = st.sidebar.radio("¿Qué deseas hacer?", [
     "🛠️ Modo Ingeniero (Ver Excel)"
 ])
 
+# ----------------------------------------------------------------------
+# CONFIGURACIÓN GLOBAL DE METAS (EN LA BARRA LATERAL)
+# ----------------------------------------------------------------------
+st.sidebar.markdown("---")
+st.sidebar.subheader("⚙️ Configuración de Metas")
+# Al usar `key="ref_tiempo"` y `key="ref_sat"`, se guardan globalmente en session_state
+REF_TIEMPO = st.sidebar.number_input("Meta máx. de tiempo (min)", value=5.0, step=0.5, key="ref_tiempo")
+REF_SAT = st.sidebar.number_input("Meta mín. satisfacción (%)", value=90, step=5, key="ref_sat")
+
 
 # ----------------------------------------------------------------------
 # BASE DE DATOS (EXCEL)
@@ -113,7 +122,7 @@ def mostrar_semaforo_visual(tiempo_promedio, tiempo_ideal=5.0, tolerancia=1.2):
     """
     umbral_amarillo = tiempo_ideal * tolerancia
 
-    # Determinar estado
+    # Determinar estado en función de la meta global
     if tiempo_promedio <= tiempo_ideal:
         estado = "verde"
         titulo = "🟢 ESTADO ÓPTIMO"
@@ -218,8 +227,8 @@ def vista_dashboard():
     felices = int(es_optimo(df['SATISFACCION']).sum())
     porcentaje_felices = felices / len(df) * 100
 
-    # --- LLAMADA AL SEMÁFORO VISUAL DE 3 LUCES ---
-    mostrar_semaforo_visual(tiempo_promedio=tiempo_promedio, tiempo_ideal=5.0)
+    # --- LLAMADA AL SEMÁFORO VISUAL USANDO LA META GLOBAL ---
+    mostrar_semaforo_visual(tiempo_promedio=tiempo_promedio, tiempo_ideal=REF_TIEMPO)
 
     col1, col2, col3 = st.columns(3)
     col1.metric("Clientes atendidos", len(df))
@@ -311,7 +320,6 @@ def vista_inferencial():
         ci_p = (dp - np.sqrt((p1 - l1)**2 + (u2 - p2)**2),
                 dp + np.sqrt((u1 - p1)**2 + (p2 - l2)**2))
         st.success(f"⚖️ **Diferencia de satisfacción entre Servicios de atención rápida y Servicios de gestión documental:** El margen de diferencia en clientes felices está entre **{ci_p[0] * 100:.1f}% y {ci_p[1] * 100:.1f}%**.")
-
         if min(n1, n2) < 10:
             st.warning(f"⚠️ Precaución: Un grupo tiene pocos datos ({min(n1, n2)} registros). Se recomienda registrar más atenciones para mayor precisión.")
     else:
@@ -321,29 +329,25 @@ def vista_inferencial():
 
     # ---------------- OBJETIVO 3 ----------------
     st.subheader("3. Evaluación de Metas del Negocio")
-    st.write("Verificación frente a los estándares esperados:")
+    st.write(f"Verificación frente a las metas globales configuradas (**{REF_TIEMPO} min** de tiempo y **{REF_SAT}%** de satisfacción):")
 
-    col_a, col_b = st.columns(2)
-    ref_tiempo = col_a.number_input("Meta máxima de tiempo esperada (min)",
-                                    value=6.0, step=0.5, key="ref_tiempo")
-    ref_sat = col_b.number_input("Meta mínima de satisfacción (%)",
-                                 value=90, step=5, key="ref_sat")
-
+    # Prueba de media usando la variable global REF_TIEMPO
     if std_time > 0:
-        _, p_val = stats.ttest_1samp(df['Minutos'], ref_tiempo, alternative='less')
+        _, p_val = stats.ttest_1samp(df['Minutos'], REF_TIEMPO, alternative='less')
         if p_val < 0.05:
-            st.success(f"🟢 **Meta de Tiempo Cumplida:** El tiempo promedio está por debajo de los {ref_tiempo} min establecidos (Demostrado estadísticamente).")
+            st.success(f"🟢 **Meta de Tiempo Cumplida:** El tiempo promedio está por debajo de la meta de {REF_TIEMPO} min (Demostrado estadísticamente).")
         else:
-            st.error(f"🔴 **Meta de Tiempo No Superada:** Todavía no hay evidencia suficiente de que estemos por debajo de los {ref_tiempo} min.")
+            st.error(f"🔴 **Meta de Tiempo No Superada:** Todavía no hay evidencia suficiente de que estemos por debajo de los {REF_TIEMPO} min.")
     else:
         st.warning("No hay suficiente variación de datos para probar la media.")
 
-    p_0 = ref_sat / 100
+    # Prueba de proporción usando la variable global REF_SAT
+    p_0 = REF_SAT / 100
     p_val_prop = stats.binomtest(felices, n_total, p_0, alternative='greater').pvalue
     if p_val_prop < 0.05:
-        st.success(f"🟢 **Meta de Satisfacción Cumplida:** Superamos con éxito la meta del {ref_sat}% de clientes felices.")
+        st.success(f"🟢 **Meta de Satisfacción Cumplida:** Superamos con éxito la meta del {REF_SAT}% de clientes felices.")
     else:
-        st.error(f"🔴 **Meta de Satisfacción No Alcanzada:** Aún no alcanzamos consistentemente la meta del {ref_sat}% de satisfacción.")
+        st.error(f"🔴 **Meta de Satisfacción No Alcanzada:** Aún no alcanzamos consistentemente la meta del {REF_SAT}% de satisfacción.")
 
 
 # ----------------------------------------------------------------------
