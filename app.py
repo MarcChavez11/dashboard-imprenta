@@ -26,13 +26,30 @@ menu = st.sidebar.radio("¿Qué deseas hacer?", [
 ])
 
 # ----------------------------------------------------------------------
-# CONFIGURACIÓN GLOBAL DE METAS (EN LA BARRA LATERAL)
+# CONFIGURACIÓN GLOBAL DE METAS (CON LÍMITES LÓGICOS)
 # ----------------------------------------------------------------------
 st.sidebar.markdown("---")
 st.sidebar.subheader("⚙️ Configuración de Metas")
-# Al usar `key="ref_tiempo"` y `key="ref_sat"`, se guardan globalmente en session_state
-REF_TIEMPO = st.sidebar.number_input("Meta máx. de tiempo (min)", value=5.0, step=0.5, key="ref_tiempo")
-REF_SAT = st.sidebar.number_input("Meta mín. satisfacción (%)", value=90, step=5, key="ref_sat")
+
+# Restringido: El tiempo mínimo útil es 0.5 min (sin negativos ni 0)
+REF_TIEMPO = st.sidebar.number_input(
+    "Meta máx. de tiempo (min)", 
+    min_value=0.5, 
+    max_value=60.0, 
+    value=5.0, 
+    step=0.5, 
+    key="ref_tiempo"
+)
+
+# Restringido: El porcentaje de satisfacción va estrictamente de 1% a 100%
+REF_SAT = st.sidebar.number_input(
+    "Meta mín. satisfacción (%)", 
+    min_value=1, 
+    max_value=100, 
+    value=90, 
+    step=5, 
+    key="ref_sat"
+)
 
 
 # ----------------------------------------------------------------------
@@ -122,7 +139,6 @@ def mostrar_semaforo_visual(tiempo_promedio, tiempo_ideal=5.0, tolerancia=1.2):
     """
     umbral_amarillo = tiempo_ideal * tolerancia
 
-    # Determinar estado en función de la meta global
     if tiempo_promedio <= tiempo_ideal:
         estado = "verde"
         titulo = "🟢 ESTADO ÓPTIMO"
@@ -136,7 +152,6 @@ def mostrar_semaforo_visual(tiempo_promedio, tiempo_ideal=5.0, tolerancia=1.2):
         titulo = "🔴 ESTADO CRÍTICO (DEMORADO)"
         desc = f"El tiempo promedio (**{tiempo_promedio:.2f} min**) supera el límite aceptable. Se requiere optimizar procesos."
 
-    # Estilos de luces (encendida vs apagada)
     c_rojo = "#ff4d4d" if estado == "rojo" else "#4d1a1a"
     op_rojo = "1" if estado == "rojo" else "0.3"
 
@@ -146,7 +161,6 @@ def mostrar_semaforo_visual(tiempo_promedio, tiempo_ideal=5.0, tolerancia=1.2):
     c_verde = "#2ecc71" if estado == "verde" else "#143d21"
     op_verde = "1" if estado == "verde" else "0.3"
 
-    # Maquetación visual en HTML
     html_semaforo = f"""
     <div style="background-color: #1e1e1e; padding: 20px; border-radius: 12px; border: 1px solid #333; margin-bottom: 20px; display: flex; align-items: center; justify-content: space-around;">
         <div style="text-align: center;">
@@ -227,7 +241,6 @@ def vista_dashboard():
     felices = int(es_optimo(df['SATISFACCION']).sum())
     porcentaje_felices = felices / len(df) * 100
 
-    # --- LLAMADA AL SEMÁFORO VISUAL USANDO LA META GLOBAL ---
     mostrar_semaforo_visual(tiempo_promedio=tiempo_promedio, tiempo_ideal=REF_TIEMPO)
 
     col1, col2, col3 = st.columns(3)
@@ -309,7 +322,7 @@ def vista_inferencial():
             concl = "El **Grupo 2** correspondiente a Servicios de gestión documental es significativamente más rápido."
         else:
             concl = "No hay una diferencia de velocidad importante entre ambos grupos."
-        st.success(f"⚖️ **Diferencia de tiempos (G1 vs G2):** Entre {ci_m[0]:.2f} a {ci_m[1]:.2f}] min. {concl}")
+        st.success(f"⚖️ **Diferencia de tiempos (G1 vs G2):** Entre {ci_m[0]:.2f} a {ci_m[1]:.2f} min. {concl}")
 
         k1 = int(es_optimo(g1['SATISFACCION']).sum())
         k2 = int(es_optimo(g2['SATISFACCION']).sum())
@@ -320,6 +333,7 @@ def vista_inferencial():
         ci_p = (dp - np.sqrt((p1 - l1)**2 + (u2 - p2)**2),
                 dp + np.sqrt((u1 - p1)**2 + (p2 - l2)**2))
         st.success(f"⚖️ **Diferencia de satisfacción entre Servicios de atención rápida y Servicios de gestión documental:** El margen de diferencia en clientes felices está entre **{ci_p[0] * 100:.1f}% y {ci_p[1] * 100:.1f}%**.")
+
         if min(n1, n2) < 10:
             st.warning(f"⚠️ Precaución: Un grupo tiene pocos datos ({min(n1, n2)} registros). Se recomienda registrar más atenciones para mayor precisión.")
     else:
@@ -331,7 +345,6 @@ def vista_inferencial():
     st.subheader("3. Evaluación de Metas del Negocio")
     st.write(f"Verificación frente a las metas globales configuradas (**{REF_TIEMPO} min** de tiempo y **{REF_SAT}%** de satisfacción):")
 
-    # Prueba de media usando la variable global REF_TIEMPO
     if std_time > 0:
         _, p_val = stats.ttest_1samp(df['Minutos'], REF_TIEMPO, alternative='less')
         if p_val < 0.05:
@@ -341,7 +354,6 @@ def vista_inferencial():
     else:
         st.warning("No hay suficiente variación de datos para probar la media.")
 
-    # Prueba de proporción usando la variable global REF_SAT
     p_0 = REF_SAT / 100
     p_val_prop = stats.binomtest(felices, n_total, p_0, alternative='greater').pvalue
     if p_val_prop < 0.05:
