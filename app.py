@@ -17,7 +17,7 @@ REFRESCO = 5             # Cada cuántos segundos se actualizan las pantallas
 
 st.set_page_config(page_title="Imprenta Flores", layout="centered")
 
-st.sidebar.title("Imprenta Flores")
+st.sidebar.title("Imprenta Floresx")
 menu = st.sidebar.radio("¿Qué deseas hacer?", [
     "⏱️ Registrar un cliente",
     "📊 Dashboard Descriptivo",
