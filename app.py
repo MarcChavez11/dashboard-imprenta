@@ -16,7 +16,7 @@ from openpyxl import load_workbook
 ARCHIVO = "Datos.xlsx"   # Base de datos (debe estar junto a este archivo)
 REFRESCO = 5             # Cada cuántos segundos se actualizan las pantallas
  
-st.set_page_config(page_title="Imprenta Floresx", layout="centered")
+st.set_page_config(page_title="Imprenta Flores", layout="centered")
  
 st.sidebar.title("Imprenta Floresx")
 menu = st.sidebar.radio("¿Qué deseas hacer?", [
