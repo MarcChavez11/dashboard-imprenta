@@ -1,6 +1,7 @@
 import os
 import threading
 from datetime import datetime, time as dtime
+from zoneinfo import ZoneInfo
 
 import streamlit as st
 import pandas as pd
@@ -14,47 +15,27 @@ from openpyxl import load_workbook
 # ----------------------------------------------------------------------
 ARCHIVO = "Datos.xlsx"   # Base de datos (debe estar junto a este archivo)
 REFRESCO = 5             # Cada cuántos segundos se actualizan las pantallas
+ZONA_PERU = ZoneInfo("America/Lima")
 
 st.set_page_config(page_title="Imprenta Flores", layout="centered")
 
-st.sidebar.title("Imprenta Flores_444")
-
-# ----------------------------------------------------------------------
-# SELECTOR DE MODO CLARO / OSCURO (NUEVO)
-# ----------------------------------------------------------------------
-st.sidebar.markdown("---")
-modo_visual = st.sidebar.radio("🎨 Tema visual:", ["🌙 Modo Oscuro", "☀️ Modo Claro"])
-
-# Aplicación de estilos CSS personalizados (Tipografía elegante y cambio de tema)
-if modo_visual == "🌙 Modo Oscuro":
-    bg_color, text_color, card_bg = "#0e1117", "#fafafa", "#1e1e1e"
-else:
-    bg_color, text_color, card_bg = "#ffffff", "#262730", "#f0f2f6"
-
-st.markdown(f"""
+# Tipografía elegante general mediante CSS limpio
+st.markdown("""
 <style>
-    /* Tipografía elegante general */
-    html, body, [class*="css"] {{
+    html, body, [class*="css"] {
         font-family: 'Inter', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-        color: {text_color};
-    }}
-    
-    /* Tamaños y estilos de títulos elegantes */
-    h1 {{
+    }
+    h1 {
         font-weight: 700;
         letter-spacing: -0.5px;
-    }}
-    h2, h3 {{
+    }
+    h2, h3 {
         font-weight: 600;
-    }}
-    
-    /* Estilo general del contenedor de la app */
-    .stApp {{
-        background-color: {bg_color};
-    }}
+    }
 </style>
 """, unsafe_allow_html=True)
 
+st.sidebar.title("Imprenta Flores_2")
 menu = st.sidebar.radio("¿Qué deseas hacer?", [
     "⏱️ Registrar un cliente",
     "✏️ Editar un registro",
@@ -121,8 +102,15 @@ def _leer_excel(ruta, fecha_modificacion):
     """La caché depende de la fecha de modificación del archivo: si el Excel
     cambia (por la app o editado a mano), se vuelve a leer automáticamente."""
     df = pd.read_excel(ruta)
-    df = df.iloc[:, :5]
-    df.columns = ['GRUPO DE SERVICIO', 'SERVICIO', 'TIEMPO_EXCEL', 'SEXO', 'SATISFACCION']
+    # Verificamos si tiene columna de fecha, si no, la adaptamos de forma segura
+    if df.shape[1] >= 6:
+        df = df.iloc[:, :6]
+        df.columns = ['GRUPO DE SERVICIO', 'SERVICIO', 'TIEMPO_EXCEL', 'SEXO', 'SATISFACCION', 'FECHA_HORA']
+    else:
+        df = df.iloc[:, :5]
+        df.columns = ['GRUPO DE SERVICIO', 'SERVICIO', 'TIEMPO_EXCEL', 'SEXO', 'SATISFACCION']
+        df['FECHA_HORA'] = "N/D"
+
     df = df.dropna(subset=['GRUPO DE SERVICIO'])
     df['Minutos'] = df['TIEMPO_EXCEL'].apply(_convertir_a_minutos)
     df['SATISFACCION'] = df['SATISFACCION'].astype(str).str.strip()
@@ -142,10 +130,12 @@ def cargar_datos():
 
 
 def guardar_registro(grupo, servicio, sexo, minutos, satisfaccion):
-    """Agrega una fila al final del Excel sin reescribir todo el archivo."""
+    """Agrega una fila al final del Excel con fecha y hora de Perú."""
     total_seg = int(round(minutos * 60))
     m, s = divmod(total_seg, 60)
     h, m = divmod(m, 60)
+    
+    fecha_actual_peru = datetime.now(ZONA_PERU).strftime("%Y-%m-%d %H:%M:%S")
 
     with obtener_candado():
         wb = load_workbook(ARCHIVO)
@@ -161,16 +151,18 @@ def guardar_registro(grupo, servicio, sexo, minutos, satisfaccion):
         celda_tiempo.number_format = "h:mm:ss"
         ws.cell(fila, 4, sexo)
         ws.cell(fila, 5, satisfaccion)
+        ws.cell(fila, 6, fecha_actual_peru)
         wb.save(ARCHIVO)
     _leer_excel.clear()
 
 
 def actualizar_registro(id_registro, grupo, servicio, sexo, minutos, satisfaccion):
-    """Modifica una fila existente en el Excel según su número de registro (ID / fila)."""
+    """Modifica una fila existente en el Excel y actualiza la fecha/hora de Perú."""
     total_seg = int(round(minutos * 60))
     m, s = divmod(total_seg, 60)
     h, m = divmod(m, 60)
-
+    
+    fecha_actual_peru = datetime.now(ZONA_PERU).strftime("%Y-%m-%d %H:%M:%S")
     num_fila_excel = id_registro + 1
 
     with obtener_candado():
@@ -183,6 +175,7 @@ def actualizar_registro(id_registro, grupo, servicio, sexo, minutos, satisfaccio
         celda_tiempo.number_format = "h:mm:ss"
         ws.cell(num_fila_excel, 4, sexo)
         ws.cell(num_fila_excel, 5, satisfaccion)
+        ws.cell(num_fila_excel, 6, fecha_actual_peru)
         wb.save(ARCHIVO)
     _leer_excel.clear()
 
@@ -200,7 +193,7 @@ def es_optimo(serie):
 
 
 # ----------------------------------------------------------------------
-# COMPONENTE VISUAL: SEMÁFORO DE 3 LUCES (ADAPTABLE A TEMA)
+# COMPONENTE VISUAL: SEMÁFORO DE 3 LUCES
 # ----------------------------------------------------------------------
 def mostrar_semaforo_visual(tiempo_promedio, tiempo_ideal=5.0, tolerancia=1.2):
     umbral_amarillo = tiempo_ideal * tolerancia
@@ -227,22 +220,18 @@ def mostrar_semaforo_visual(tiempo_promedio, tiempo_ideal=5.0, tolerancia=1.2):
     c_verde = "#2ecc71" if estado == "verde" else "#143d21"
     op_verde = "1" if estado == "verde" else "0.3"
 
-    card_bg_semaforo = "#1e1e1e" if modo_visual == "🌙 Modo Oscuro" else "#f8f9fa"
-    text_color_semaforo = "#ffffff" if modo_visual == "🌙 Modo Oscuro" else "#262730"
-    sub_color_semaforo = "#ccc" if modo_visual == "🌙 Modo Oscuro" else "#555"
-
     html_semaforo = f"""
-    <div style="background-color: {card_bg_semaforo}; padding: 20px; border-radius: 12px; border: 1px solid #444; margin-bottom: 20px; display: flex; align-items: center; justify-content: space-around;">
+    <div style="padding: 20px; border-radius: 12px; border: 1px solid rgba(128,128,128,0.3); margin-bottom: 20px; display: flex; align-items: center; justify-content: space-around;">
         <div style="text-align: center;">
-            <div style="display: flex; gap: 12px; background: #111; padding: 10px 18px; border-radius: 30px; border: 2px solid #555; box-shadow: inset 0 0 10px rgba(0,0,0,0.8);">
+            <div style="display: flex; gap: 12px; background: rgba(0,0,0,0.1); padding: 10px 18px; border-radius: 30px; border: 2px solid rgba(128,128,128,0.4); box-shadow: inset 0 0 10px rgba(0,0,0,0.3);">
                 <div style="width: 30px; height: 30px; background-color: {c_rojo}; opacity: {op_rojo}; border-radius: 50%; box-shadow: 0 0 { '15px ' + c_rojo if estado=='rojo' else 'none'};"></div>
                 <div style="width: 30px; height: 30px; background-color: {c_amarillo}; opacity: {op_amarillo}; border-radius: 50%; box-shadow: 0 0 { '15px ' + c_amarillo if estado=='amarillo' else 'none'};"></div>
                 <div style="width: 30px; height: 30px; background-color: {c_verde}; opacity: {op_verde}; border-radius: 50%; box-shadow: 0 0 { '15px ' + c_verde if estado=='verde' else 'none'};"></div>
             </div>
         </div>
         <div style="flex-grow: 1; margin-left: 20px;">
-            <h4 style="margin: 0 0 5px 0; color: {text_color_semaforo}; font-size: 18px;">{titulo}</h4>
-            <p style="margin: 0; color: {sub_color_semaforo}; font-size: 14px;">{desc}</p>
+            <h4 style="margin: 0 0 5px 0; font-size: 18px;">{titulo}</h4>
+            <p style="margin: 0; font-size: 14px; opacity: 0.85;">{desc}</p>
         </div>
     </div>
     """
@@ -275,7 +264,7 @@ def vista_registro():
                 minutos=tiempo,
                 satisfaccion='OPTIMO' if "Sí" in satisfaccion else 'REGULAR',
             )
-            st.success("¡Listo! Registro guardado. El dashboard y el análisis se actualizan solos.")
+            st.success("¡Listo! Registro guardado con fecha y hora de Perú. El dashboard y el análisis se actualizan solos.")
         except PermissionError:
             st.error("No se pudo guardar: el Excel está abierto en otro programa. Ciérralo e inténtalo de nuevo.")
         except Exception as e:
@@ -354,9 +343,12 @@ def mostrar_ultimos():
     df = cargar_datos()
     st.caption(f"Total de clientes registrados: {len(df)}")
     
-    df_visual = df[['GRUPO DE SERVICIO', 'SERVICIO', 'Minutos', 'SEXO', 'SATISFACCION']].tail(5).iloc[::-1].copy()
-    df_visual['TIEMPO (MM:SS)'] = df_visual['Minutos'].apply(_formatear_minutos_a_mmss)
-    df_visual = df_visual[['GRUPO DE SERVICIO', 'SERVICIO', 'TIEMPO (MM:SS)', 'SEXO', 'SATISFACCION']]
+    cols_mostrar = [c for c in ['GRUPO DE SERVICIO', 'SERVICIO', 'Minutos', 'SEXO', 'SATISFACCION', 'FECHA_HORA'] if c in df.columns]
+    df_visual = df[cols_mostrar].tail(5).iloc[::-1].copy()
+    if 'Minutos' in df_visual.columns:
+        df_visual['TIEMPO (MM:SS)'] = df_visual['Minutos'].apply(_formatear_minutos_a_mmss)
+        cols_orden = [c if c != 'Minutos' else 'TIEMPO (MM:SS)' for c in cols_mostrar]
+        df_visual = df_visual[cols_orden]
     
     st.dataframe(df_visual, use_container_width=True)
 
@@ -369,7 +361,7 @@ def vista_dashboard():
     st.title("Resumen de tu negocio")
     df = cargar_datos()
     st.caption(f"🔄 Actualización automática cada {REFRESCO} s · "
-               f"Última lectura: {datetime.now().strftime('%H:%M:%S')}")
+               f"Última lectura: {datetime.now(ZONA_PERU).strftime('%H:%M:%S')}")
 
     tiempo_promedio = df['Minutos'].mean()
     felices = int(es_optimo(df['SATISFACCION']).sum())
@@ -401,7 +393,7 @@ def vista_dashboard():
 def vista_inferencial():
     st.title("Análisis Estadístico del Negocio")
     st.caption(f"🔄 Actualización automática cada {REFRESCO} s · "
-               f"Última lectura: {datetime.now().strftime('%H:%M:%S')}")
+               f"Última lectura: {datetime.now(ZONA_PERU).strftime('%H:%M:%S')}")
 
     df = cargar_datos()
     n_total = len(df)
@@ -494,7 +486,7 @@ def vista_inferencial():
     if p_val_prop < 0.05:
         st.success(f"🟢 **Meta de Satisfacción Cumplida:** Superamos con éxito la meta del {REF_SAT}% de clientes felices.")
     else:
-        st.error(f"🔴 **Meta de Satisfacción No Alcanzada:** Aún no alcanzamos consistentemente la meta del % de satisfacción.")
+        st.error(f"🔴 **Meta de Satisfacción No Alcanzada:** Aún no alcanzamos consistentemente la meta del {REF_SAT}% de satisfacción.")
 
 
 # ----------------------------------------------------------------------
@@ -505,7 +497,7 @@ def vista_excel():
     st.title("Base de datos en tiempo real")
     df = cargar_datos()
     st.caption(f"🔄 Actualización automática cada {REFRESCO} s · "
-               f"{len(df)} registros · Última lectura: {datetime.now().strftime('%H:%M:%S')}")
+               f"{len(df)} registros · Última lectura: {datetime.now(ZONA_PERU).strftime('%H:%M:%S')}")
     st.dataframe(df, use_container_width=True)
 
     with open(ARCHIVO, "rb") as f:
