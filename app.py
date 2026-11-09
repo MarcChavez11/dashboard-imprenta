@@ -17,9 +17,10 @@ REFRESCO = 5             # Cada cuántos segundos se actualizan las pantallas
 
 st.set_page_config(page_title="Imprenta Flores", layout="centered")
 
-st.sidebar.title("Imprenta Floresxy")
+st.sidebar.title("Imprenta Flores_444")
 menu = st.sidebar.radio("¿Qué deseas hacer?", [
     "⏱️ Registrar un cliente",
+    "✏️ Editar un registro",
     "📊 Dashboard Descriptivo",
     "📈 Análisis Inferencial",
     "🛠️ Modo Ingeniero (Ver Excel)"
@@ -126,6 +127,30 @@ def guardar_registro(grupo, servicio, sexo, minutos, satisfaccion):
         ws.cell(fila, 4, sexo)
         ws.cell(fila, 5, satisfaccion)
         wb.save(ARCHIVO)
+    _leer_excel.clear()
+
+
+def actualizar_registro(id_registro, grupo, servicio, sexo, minutos, satisfaccion):
+    """Modifica una fila existente en el Excel según su número de registro (ID / fila)."""
+    total_seg = int(round(minutos * 60))
+    m, s = divmod(total_seg, 60)
+    h, m = divmod(m, 60)
+
+    # El encabezado ocupa la fila 1, por lo que la fila en Excel es id_registro + 1
+    num_fila_excel = id_registro + 1
+
+    with obtener_candado():
+        wb = load_workbook(ARCHIVO)
+        ws = wb.active
+        
+        ws.cell(num_fila_excel, 1, grupo)
+        ws.cell(num_fila_excel, 2, servicio)
+        celda_tiempo = ws.cell(num_fila_excel, 3, dtime(h, m, s))
+        celda_tiempo.number_format = "h:mm:ss"
+        ws.cell(num_fila_excel, 4, sexo)
+        ws.cell(num_fila_excel, 5, satisfaccion)
+        wb.save(ARCHIVO)
+    _leer_excel.clear()
 
 
 def intervalo_wilson(k, n, z=1.96):
@@ -217,8 +242,7 @@ def vista_registro():
             )
             st.success("¡Listo! Registro guardado. El dashboard y el análisis se actualizan solos.")
         except PermissionError:
-            st.error("No se pudo guardar: el Excel está abierto en otro programa. "
-                     "Ciérralo e inténtalo de nuevo.")
+            st.error("No se pudo guardar: el Excel está abierto en otro programa. Ciérralo e inténtalo de nuevo.")
         except Exception as e:
             st.error(f"No se pudo guardar el registro: {e}")
 
@@ -227,12 +251,76 @@ def vista_registro():
     mostrar_ultimos()
 
 
+# ----------------------------------------------------------------------
+# PANTALLA NUEVA: EDITAR UN REGISTRO
+# ----------------------------------------------------------------------
+def vista_editar():
+    st.title("✏️ Editar Registro de Cliente")
+    df = cargar_datos()
+
+    if len(df) == 0:
+        st.warning("No hay registros disponibles para editar.")
+        return
+
+    # Selección del registro por su número de índice (ID)
+    opciones = [f"Registro #{idx} - {row['SERVICIO']} ({row['Minutos']:.2f} min)" for idx, row in df.iterrows()]
+    seleccion = st.selectbox("Selecciona el registro que deseas modificar:", opciones)
+    id_registro = int(seleccion.split("#")[1].split(" -")[0])
+
+    # Extraer los datos actuales del registro seleccionado
+    registro_actual = df.loc[id_registro]
+    grupo_previo = int(registro_actual['GRUPO DE SERVICIO'])
+    servicio_previo = str(registro_actual['SERVICIO'])
+    sexo_previo = str(registro_actual['SEXO'])
+    minutos_previos = float(registro_actual['Minutos'])
+    sat_previa = str(registro_actual['SATISFACCION'])
+
+    st.markdown("---")
+    st.subheader(f"Modificando Registro #{id_registro}")
+
+    with st.form("form_editar"):
+        idx_grupo = 0 if grupo_previo == 1 else 1
+        nuevo_grupo = st.radio("Tipo de servicio:",
+                               ["Grupo 1 (Copias/Impresiones)", "Grupo 2 (Trámites/Pasaporte)"],
+                               index=idx_grupo)
+
+        nuevo_servicio = st.text_input("Servicio exacto:", value=servicio_previo)
+
+        idx_sexo = 0 if sexo_previo.upper() == "F" else 1
+        nuevo_sexo = st.radio("Sexo del cliente:", ["F", "M"], index=idx_sexo, horizontal=True)
+
+        nuevo_tiempo = st.number_input("Minutos de demora:", min_value=0.1, value=minutos_previos, step=0.5)
+
+        idx_sat = 0 if es_optimo(pd.Series([sat_previa]))[0] else 1
+        nueva_satisfaccion = st.radio("Satisfacción del cliente:",
+                                      ["Sí, OPTIMO 😊", "NO, hubo molestias 😞"],
+                                      index=idx_sat)
+
+        guardar_cambios = st.form_submit_button("Actualizar Registro en Excel 💾", use_container_width=True)
+
+    if guardar_cambios:
+        try:
+            actualizar_registro(
+                id_registro=id_registro,
+                grupo=1 if "Grupo 1" in nuevo_grupo else 2,
+                servicio=nuevo_servicio.strip() if nuevo_servicio.strip() else "Varios",
+                sexo=nuevo_sexo,
+                minutos=nuevo_tiempo,
+                satisfaccion='OPTIMO' if "Sí" in nueva_satisfaccion else 'REGULAR',
+            )
+            st.success(f"¡Registro #{id_registro} actualizado correctamente en Excel!")
+            st.rerun()
+        except PermissionError:
+            st.error("No se pudo actualizar: el archivo Excel está abierto en otro programa. Ciérralo e inténtalo de nuevo.")
+        except Exception as e:
+            st.error(f"Error al actualizar el registro: {e}")
+
+
 @st.fragment(run_every=REFRESCO)
 def mostrar_ultimos():
     df = cargar_datos()
     st.caption(f"Total de clientes registrados: {len(df)}")
     
-    # Creamos una copia para mostrar los minutos formateados como MM:SS en la tabla visual
     df_visual = df[['GRUPO DE SERVICIO', 'SERVICIO', 'Minutos', 'SEXO', 'SATISFACCION']].tail(5).iloc[::-1].copy()
     df_visual['TIEMPO (MM:SS)'] = df_visual['Minutos'].apply(_formatear_minutos_a_mmss)
     df_visual = df_visual[['GRUPO DE SERVICIO', 'SERVICIO', 'TIEMPO (MM:SS)', 'SEXO', 'SATISFACCION']]
@@ -266,7 +354,6 @@ def vista_dashboard():
     df_grupos = df.groupby('GRUPO DE SERVICIO')['Minutos'].mean().reset_index()
     df_grupos['GRUPO DE SERVICIO'] = "Grupo " + df_grupos['GRUPO DE SERVICIO'].astype(int).astype(str)
     
-    # Agregamos texto formateado para las barras del gráfico
     df_grupos['Tiempo_Texto'] = df_grupos['Minutos'].apply(_formatear_minutos_a_mmss)
     
     fig1 = px.bar(df_grupos, x='GRUPO DE SERVICIO', y='Minutos',
@@ -401,6 +488,8 @@ def vista_excel():
 # ----------------------------------------------------------------------
 if menu == "⏱️ Registrar un cliente":
     vista_registro()
+elif menu == "✏️ Editar un registro":
+    vista_editar()
 elif menu == "📊 Dashboard Descriptivo":
     vista_dashboard()
 elif menu == "📈 Análisis Inferencial":
