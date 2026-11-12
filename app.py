@@ -13,13 +13,13 @@ from openpyxl import load_workbook
 # ----------------------------------------------------------------------
 # CONFIGURACIÓN - Base de datos
 # ----------------------------------------------------------------------
-ARCHIVO = "Datos.xlsx"   # Base de datos (debe estar junto a este archivo)
-REFRESCO = 5             # Cada cuántos segundos se actualizan las pantallas
+ARCHIVO = "Datos.xlsx"   # Debe estar en el mismo repositorio de GitHub junto a app.py
+REFRESCO = 5             # Segundos para actualización automática en pantalla
 ZONA_PERU = ZoneInfo("America/Lima")
 
 st.set_page_config(page_title="Imprenta Flores", layout="centered")
 
-# Tipografía elegante general mediante CSS limpio
+# Estilo de letra elegante (Tipografía general)
 st.markdown("""
 <style>
     html, body, [class*="css"] {
@@ -35,7 +35,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-st.sidebar.title("Imprenta Flores_2")
+st.sidebar.title("Imprenta Flores")
 menu = st.sidebar.radio("¿Qué deseas hacer?", [
     "⏱️ Registrar un cliente",
     "✏️ Editar un registro",
@@ -45,7 +45,7 @@ menu = st.sidebar.radio("¿Qué deseas hacer?", [
 ])
 
 # ----------------------------------------------------------------------
-# CONFIGURACIÓN GLOBAL DE METAS (CON LÍMITES LÓGICOS)
+# CONFIGURACIÓN GLOBAL DE METAS
 # ----------------------------------------------------------------------
 st.sidebar.markdown("---")
 st.sidebar.subheader("⚙️ Configuración de Metas")
@@ -70,12 +70,11 @@ REF_SAT = st.sidebar.number_input(
 
 
 # ----------------------------------------------------------------------
-# BASE DE DATOS (EXCEL)
+# BASE DE DATOS (EXCEL) Y CONCURRENCIA
 # ----------------------------------------------------------------------
 @st.cache_resource
 def obtener_candado():
-    """Un solo candado compartido por todas las sesiones, para que dos
-    registros simultáneos no se pisen al escribir el Excel."""
+    """Candado compartido para evitar conflictos de escritura simultánea en el Excel."""
     return threading.Lock()
 
 
@@ -88,7 +87,6 @@ def _convertir_a_minutos(t):
 
 
 def _formatear_minutos_a_mmss(minutos_decimal):
-    """Convierte un valor decimal de minutos a formato 'MM:SS' para mostrarse amigable."""
     try:
         total_segundos = int(round(float(minutos_decimal) * 60))
         m, s = divmod(total_segundos, 60)
@@ -99,10 +97,7 @@ def _formatear_minutos_a_mmss(minutos_decimal):
 
 @st.cache_data
 def _leer_excel(ruta, fecha_modificacion):
-    """La caché depende de la fecha de modificación del archivo: si el Excel
-    cambia (por la app o editado a mano), se vuelve a leer automáticamente."""
     df = pd.read_excel(ruta)
-    # Verificamos si tiene columna de fecha, si no, la adaptamos de forma segura
     if df.shape[1] >= 6:
         df = df.iloc[:, :6]
         df.columns = ['GRUPO DE SERVICIO', 'SERVICIO', 'TIEMPO_EXCEL', 'SEXO', 'SATISFACCION', 'FECHA_HORA']
@@ -122,15 +117,14 @@ def cargar_datos():
     try:
         return _leer_excel(ARCHIVO, os.path.getmtime(ARCHIVO))
     except FileNotFoundError:
-        st.error(f"No encuentro el archivo {ARCHIVO}. Debe estar en la misma carpeta que app.py.")
+        st.error(f"No encuentro el archivo {ARCHIVO}. Debe estar en el repositorio junto a app.py.")
         st.stop()
     except Exception as e:
-        st.warning(f"No pude leer el Excel en este momento (¿se está guardando?). Reintentando... ({e})")
+        st.warning(f"No pude leer el Excel en este momento. Reintentando... ({e})")
         st.stop()
 
 
 def guardar_registro(grupo, servicio, sexo, minutos, satisfaccion):
-    """Agrega una fila al final del Excel con fecha y hora de Perú."""
     total_seg = int(round(minutos * 60))
     m, s = divmod(total_seg, 60)
     h, m = divmod(m, 60)
@@ -157,7 +151,6 @@ def guardar_registro(grupo, servicio, sexo, minutos, satisfaccion):
 
 
 def actualizar_registro(id_registro, grupo, servicio, sexo, minutos, satisfaccion):
-    """Modifica una fila existente en el Excel y actualiza la fecha/hora de Perú."""
     total_seg = int(round(minutos * 60))
     m, s = divmod(total_seg, 60)
     h, m = divmod(m, 60)
@@ -264,7 +257,7 @@ def vista_registro():
                 minutos=tiempo,
                 satisfaccion='OPTIMO' if "Sí" in satisfaccion else 'REGULAR',
             )
-            st.success("¡Listo! Registro guardado con fecha y hora de Perú. El dashboard y el análisis se actualizan solos.")
+            st.success("¡Listo! Registro guardado de forma permanente en Excel con hora de Perú.")
         except PermissionError:
             st.error("No se pudo guardar: el Excel está abierto en otro programa. Ciérralo e inténtalo de nuevo.")
         except Exception as e:
@@ -333,7 +326,7 @@ def vista_editar():
             st.success(f"¡Registro #{id_registro} actualizado correctamente en Excel!")
             st.rerun()
         except PermissionError:
-            st.error("No se pudo actualizar: el archivo Excel está abierto en otro programa. Ciérralo e inténtalo de nuevo.")
+            st.error("No se pudo actualizar: el archivo Excel está abierto en otro programa.")
         except Exception as e:
             st.error(f"Error al actualizar el registro: {e}")
 
@@ -403,8 +396,6 @@ def vista_inferencial():
         return
 
     st.subheader("1. Estimación General del Servicio")
-    st.write("Confiabilidad estadística basada en las atenciones actuales:")
-
     mean_time = df['Minutos'].mean()
     std_time = df['Minutos'].std()
     if std_time > 0:
@@ -426,8 +417,6 @@ def vista_inferencial():
     st.divider()
 
     st.subheader("2. Comparación entre Grupos de Servicio")
-    st.write("Evaluando cuál grupo de servicio rinde mejor:")
-
     g1 = df[df['GRUPO DE SERVICIO'] == 1]
     g2 = df[df['GRUPO DE SERVICIO'] == 2]
 
@@ -445,52 +434,35 @@ def vista_inferencial():
             ci_m = (diff_mean, diff_mean)
 
         if ci_m[1] < 0:
-            concl = "El **Grupo 1**, correspondiente a Servicios de atención rápida es significativamente más rápido."
+            concl = "El **Grupo 1** es significativamente más rápido."
         elif ci_m[0] > 0:
-            concl = "El **Grupo 2** correspondiente a Servicios de gestión documental es significativamente más rápido."
+            concl = "El **Grupo 2** es significativamente más rápido."
         else:
-            concl = "No hay una diferencia de velocidad importante entre ambos grupos."
-        st.success(f"⚖️ **Diferencia de tiempos (G1 vs G2):** Entre {ci_m[0]:.2f} a {ci_m[1]:.2f} min. {concl}")
-
-        k1 = int(es_optimo(g1['SATISFACCION']).sum())
-        k2 = int(es_optimo(g2['SATISFACCION']).sum())
-        p1, p2 = k1 / n1, k2 / n2
-        l1, u1 = intervalo_wilson(k1, n1)
-        l2, u2 = intervalo_wilson(k2, n2)
-        dp = p1 - p2
-        ci_p = (dp - np.sqrt((p1 - l1)**2 + (u2 - p2)**2),
-                dp + np.sqrt((u1 - p1)**2 + (p2 - l2)**2))
-        st.success(f"⚖️ **Diferencia de satisfacción entre Servicios de atención rápida y Servicios de gestión documental:** El margen de diferencia en clientes felices está entre **{ci_p[0] * 100:.1f}% y {ci_p[1] * 100:.1f}%**.")
-
-        if min(n1, n2) < 10:
-            st.warning(f"⚠️ Precaución: Un grupo tiene pocos datos ({min(n1, n2)} registros). Se recomienda registrar más atenciones para mayor precisión.")
+            concl = "No hay diferencia de velocidad importante."
+        st.success(f"⚖️ **Diferencia de tiempos:** Entre {ci_m[0]:.2f} a {ci_m[1]:.2f} min. {concl}")
     else:
-        st.warning("Se necesitan al menos 2 datos en cada grupo para hacer comparaciones.")
+        st.warning("Se necesitan al menos 2 datos en cada grupo para comparar.")
 
     st.divider()
 
     st.subheader("3. Evaluación de Metas del Negocio")
-    st.write(f"Verificación frente a las metas globales configuradas (**{REF_TIEMPO} min** de tiempo y **{REF_SAT}%** de satisfacción):")
-
     if std_time > 0:
         _, p_val = stats.ttest_1samp(df['Minutos'], REF_TIEMPO, alternative='less')
         if p_val < 0.05:
-            st.success(f"🟢 **Meta de Tiempo Cumplida:** El tiempo promedio está por debajo de la meta de {REF_TIEMPO} min (Demostrado estadísticamente).")
+            st.success(f"🟢 **Meta de Tiempo Cumplida:** Promedio por debajo de {REF_TIEMPO} min.")
         else:
-            st.error(f"🔴 **Meta de Tiempo No Superada:** Todavía no hay evidencia suficiente de que estemos por debajo de los {REF_TIEMPO} min.")
-    else:
-        st.warning("No hay suficiente variación de datos para probar la media.")
+            st.error(f"🔴 **Meta de Tiempo No Superada.**")
 
     p_0 = REF_SAT / 100
     p_val_prop = stats.binomtest(felices, n_total, p_0, alternative='greater').pvalue
     if p_val_prop < 0.05:
-        st.success(f"🟢 **Meta de Satisfacción Cumplida:** Superamos con éxito la meta del {REF_SAT}% de clientes felices.")
+        st.success(f"🟢 **Meta de Satisfacción Cumplida:** Supera el {REF_SAT}%.")
     else:
-        st.error(f"🔴 **Meta de Satisfacción No Alcanzada:** Aún no alcanzamos consistentemente la meta del {REF_SAT}% de satisfacción.")
+        st.error(f"🔴 **Meta de Satisfacción No Alcanzada.**")
 
 
 # ----------------------------------------------------------------------
-# PANTALLA 4: TABLA
+# PANTALLA 4: TABLA Y DESCARGA
 # ----------------------------------------------------------------------
 @st.fragment(run_every=REFRESCO)
 def vista_excel():
