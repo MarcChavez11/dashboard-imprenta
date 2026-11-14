@@ -186,23 +186,33 @@ def es_optimo(serie):
 
 
 # ----------------------------------------------------------------------
-# COMPONENTE VISUAL: SEMÁFORO DE 3 LUCES
+# COMPONENTE VISUAL: SEMÁFORO ESTADÍSTICO DE 3 LUCES
 # ----------------------------------------------------------------------
-def mostrar_semaforo_visual(tiempo_promedio, tiempo_ideal=5.0, tolerancia=1.2):
-    umbral_amarillo = tiempo_ideal * tolerancia
+def mostrar_semaforo_visual(serie_tiempos, tiempo_ideal=5.0):
+    n = len(serie_tiempos)
+    tiempo_promedio = serie_tiempos.mean() if n > 0 else 0.0
+    std_time = serie_tiempos.std() if n > 1 else 0.0
 
-    if tiempo_promedio <= tiempo_ideal:
-        estado = "verde"
-        titulo = "🟢 ESTADO ÓPTIMO"
-        desc = f"El tiempo promedio (**{tiempo_promedio:.2f} min**) cumple perfectamente con la meta (≤ {tiempo_ideal:.1f} min)."
-    elif tiempo_promedio <= umbral_amarillo:
+    # Lógica basada en Prueba de Hipótesis (t de Student, alpha = 0.05)
+    if n < 2 or std_time == 0:
         estado = "amarillo"
-        titulo = "🟡 ESTADO DE PRECAUCIÓN"
-        desc = f"El tiempo promedio (**{tiempo_promedio:.2f} min**) excede un poco la meta ideal, manteniéndose en zona de precaución."
+        titulo = "🟡 DATOS INSUFICIENTES"
+        desc = f"Promedio actual: **{tiempo_promedio:.2f} min**. Se necesitan más datos variables para validar la meta estadísticamente."
     else:
-        estado = "rojo"
-        titulo = "🔴 ESTADO CRÍTICO (DEMORADO)"
-        desc = f"El tiempo promedio (**{tiempo_promedio:.2f} min**) supera el límite aceptable. Se requiere optimizar procesos."
+        t_stat, p_val = stats.ttest_1samp(serie_tiempos, tiempo_ideal)
+
+        if tiempo_promedio < tiempo_ideal and p_val < 0.05:
+            estado = "verde"
+            titulo = "🟢 ESTADO ÓPTIMO (COMPROBADO)"
+            desc = f"Promedio de **{tiempo_promedio:.2f} min** (p = {p_val:.3f}). Hay evidencia estadística de que cumples la meta (< {tiempo_ideal:.1f} min)."
+        elif tiempo_promedio > tiempo_ideal and p_val < 0.05:
+            estado = "rojo"
+            titulo = "🔴 ESTADO CRÍTICO (DEMORADO)"
+            desc = f"Promedio de **{tiempo_promedio:.2f} min** (p = {p_val:.3f}). Se confirma estadísticamente que superas el límite de {tiempo_ideal:.1f} min."
+        else:
+            estado = "amarillo"
+            titulo = "🟡 ZONA NEUTRA / PRECAUCIÓN"
+            desc = f"Promedio de **{tiempo_promedio:.2f} min** (p = {p_val:.3f}). Estadísticamente en el límite de la meta ({tiempo_ideal:.1f} min); requiere vigilancia."
 
     c_rojo = "#ff4d4d" if estado == "rojo" else "#4d1a1a"
     op_rojo = "1" if estado == "rojo" else "0.3"
@@ -229,7 +239,6 @@ def mostrar_semaforo_visual(tiempo_promedio, tiempo_ideal=5.0, tolerancia=1.2):
     </div>
     """
     st.markdown(html_semaforo, unsafe_allow_html=True)
-
 
 # ----------------------------------------------------------------------
 # PANTALLA 1: REGISTRO
@@ -360,7 +369,8 @@ def vista_dashboard():
     felices = int(es_optimo(df['SATISFACCION']).sum())
     porcentaje_felices = felices / len(df) * 100
 
-    mostrar_semaforo_visual(tiempo_promedio=tiempo_promedio, tiempo_ideal=REF_TIEMPO)
+        # Busca esta línea en vista_dashboard() y cámbiala por:
+    mostrar_semaforo_visual(serie_tiempos=df['Minutos'], tiempo_ideal=REF_TIEMPO)
 
     col1, col2, col3 = st.columns(3)
     col1.metric("Clientes atendidos", len(df))
@@ -406,8 +416,8 @@ def vista_inferencial():
 
     felices = int(es_optimo(df['SATISFACCION']).sum())
 
-    lo = stats.beta.ppf(0.025, felices, n_total - felices + 1) if felices > 0 else 0.0
-    hi = stats.beta.ppf(0.975, felices + 1, n_total - felices) if felices < n_total else 1.0
+    # Usamos tu función intervalo_wilson definida al inicio
+    lo, hi = intervalo_wilson(felices, n_total, z=1.96)
     ci_prop = (lo * 100, hi * 100)
 
     t_inf_str = f"{_formatear_minutos_a_mmss(ci_time[0])} a {_formatear_minutos_a_mmss(ci_time[1])}"
