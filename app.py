@@ -1,6 +1,5 @@
-import os
-import threading
-from datetime import datetime, time as dtime
+import io
+from datetime import datetime
 from zoneinfo import ZoneInfo
 
 import streamlit as st
@@ -8,12 +7,11 @@ import pandas as pd
 import plotly.express as px
 import scipy.stats as stats
 import numpy as np
-from openpyxl import load_workbook
+from sqlalchemy import text
 
 # ----------------------------------------------------------------------
-# CONFIGURACIÓN - Base de datos
+# CONFIGURACIÓN - Base de datos en la nube (Neon / PostgreSQL)
 # ----------------------------------------------------------------------
-ARCHIVO = "Datos.xlsx"   # Debe estar en el mismo repositorio de GitHub junto a app.py
 REFRESCO = 5             # Segundos para actualización automática en pantalla
 ZONA_PERU = ZoneInfo("America/Lima")
 
@@ -68,22 +66,31 @@ REF_SAT = st.sidebar.number_input(
     key="ref_sat"
 )
 
-
 # ----------------------------------------------------------------------
-# BASE DE DATOS (EXCEL) Y CONCURRENCIA
+# CONEXIÓN A BASE DE DATOS EN LA NUBE (NEON)
 # ----------------------------------------------------------------------
-@st.cache_resource
-def obtener_candado():
-    """Candado compartido para evitar conflictos de escritura simultánea en el Excel."""
-    return threading.Lock()
+conn = st.connection("postgresql", type="sql")
 
 
-def _convertir_a_minutos(t):
-    try:
-        return t.hour * 60 + t.minute + t.second / 60
-    except Exception:
-        partes = str(t).split(':')
-        return int(partes[0]) * 60 + int(partes[1]) + float(partes[2]) / 60
+def inicializar_bd():
+    """Crea la tabla automáticamente en Neon si aún no existe."""
+    query_crear = text("""
+        CREATE TABLE IF NOT EXISTS registros (
+            id SERIAL PRIMARY KEY,
+            grupo_servicio INT NOT NULL,
+            servicio TEXT NOT NULL,
+            minutos NUMERIC(10, 4) NOT NULL,
+            sexo VARCHAR(5) NOT NULL,
+            satisfaccion VARCHAR(20) NOT NULL,
+            fecha_hora VARCHAR(30) NOT NULL
+        );
+    """)
+    with conn.session as s:
+        s.execute(query_crear)
+        s.commit()
+
+
+inicializar_bd()
 
 
 def _formatear_minutos_a_mmss(minutos_decimal):
@@ -95,82 +102,79 @@ def _formatear_minutos_a_mmss(minutos_decimal):
         return str(minutos_decimal)
 
 
-@st.cache_data
-def _leer_excel(ruta, fecha_modificacion):
-    df = pd.read_excel(ruta)
-    if df.shape[1] >= 6:
-        df = df.iloc[:, :6]
-        df.columns = ['GRUPO DE SERVICIO', 'SERVICIO', 'TIEMPO_EXCEL', 'SEXO', 'SATISFACCION', 'FECHA_HORA']
-    else:
-        df = df.iloc[:, :5]
-        df.columns = ['GRUPO DE SERVICIO', 'SERVICIO', 'TIEMPO_EXCEL', 'SEXO', 'SATISFACCION']
-        df['FECHA_HORA'] = "N/D"
-
-    df = df.dropna(subset=['GRUPO DE SERVICIO'])
-    df['Minutos'] = df['TIEMPO_EXCEL'].apply(_convertir_a_minutos)
-    df['SATISFACCION'] = df['SATISFACCION'].astype(str).str.strip()
-    df.index = range(1, len(df) + 1)
-    return df
-
-
 def cargar_datos():
     try:
-        return _leer_excel(ARCHIVO, os.path.getmtime(ARCHIVO))
-    except FileNotFoundError:
-        st.error(f"No encuentro el archivo {ARCHIVO}. Debe estar en el repositorio junto a app.py.")
-        st.stop()
+        df = conn.query("SELECT * FROM registros ORDER BY id ASC;", ttl=0)
+        
+        if df.empty:
+            return pd.DataFrame(columns=[
+                'GRUPO DE SERVICIO', 'SERVICIO', 'Minutos', 'SEXO', 'SATISFACCION', 'FECHA_HORA'
+            ])
+
+        df = df.rename(columns={
+            'grupo_servicio': 'GRUPO DE SERVICIO',
+            'servicio': 'SERVICIO',
+            'minutos': 'Minutos',
+            'sexo': 'SEXO',
+            'satisfaccion': 'SATISFACCION',
+            'fecha_hora': 'FECHA_HORA'
+        })
+        
+        df['Minutos'] = df['Minutos'].astype(float)
+        df['SATISFACCION'] = df['SATISFACCION'].astype(str).str.strip()
+        df = df.set_index('id')
+        return df
+
     except Exception as e:
-        st.warning(f"No pude leer el Excel en este momento. Reintentando... ({e})")
+        st.error(f"Error al conectar con la base de datos en la nube: {e}")
         st.stop()
 
 
 def guardar_registro(grupo, servicio, sexo, minutos, satisfaccion):
-    total_seg = int(round(minutos * 60))
-    m, s = divmod(total_seg, 60)
-    h, m = divmod(m, 60)
-    
     fecha_actual_peru = datetime.now(ZONA_PERU).strftime("%Y-%m-%d %H:%M:%S")
-
-    with obtener_candado():
-        wb = load_workbook(ARCHIVO)
-        ws = wb.active
-        fila = ws.max_row
-        while fila > 1 and ws.cell(fila, 1).value is None:
-            fila -= 1
-        fila += 1
-
-        ws.cell(fila, 1, grupo)
-        ws.cell(fila, 2, servicio)
-        celda_tiempo = ws.cell(fila, 3, dtime(h, m, s))
-        celda_tiempo.number_format = "h:mm:ss"
-        ws.cell(fila, 4, sexo)
-        ws.cell(fila, 5, satisfaccion)
-        ws.cell(fila, 6, fecha_actual_peru)
-        wb.save(ARCHIVO)
-    _leer_excel.clear()
+    
+    query = text("""
+        INSERT INTO registros (grupo_servicio, servicio, minutos, sexo, satisfaccion, fecha_hora)
+        VALUES (:grupo, :servicio, :minutos, :sexo, :satisfaccion, :fecha_hora)
+    """)
+    
+    with conn.session as s:
+        s.execute(query, {
+            "grupo": int(grupo),
+            "servicio": str(servicio),
+            "minutos": float(minutos),
+            "sexo": str(sexo),
+            "satisfaccion": str(satisfaccion),
+            "fecha_hora": fecha_actual_peru
+        })
+        s.commit()
 
 
 def actualizar_registro(id_registro, grupo, servicio, sexo, minutos, satisfaccion):
-    total_seg = int(round(minutos * 60))
-    m, s = divmod(total_seg, 60)
-    h, m = divmod(m, 60)
-    
     fecha_actual_peru = datetime.now(ZONA_PERU).strftime("%Y-%m-%d %H:%M:%S")
-    num_fila_excel = id_registro + 1
-
-    with obtener_candado():
-        wb = load_workbook(ARCHIVO)
-        ws = wb.active
-        
-        ws.cell(num_fila_excel, 1, grupo)
-        ws.cell(num_fila_excel, 2, servicio)
-        celda_tiempo = ws.cell(num_fila_excel, 3, dtime(h, m, s))
-        celda_tiempo.number_format = "h:mm:ss"
-        ws.cell(num_fila_excel, 4, sexo)
-        ws.cell(num_fila_excel, 5, satisfaccion)
-        ws.cell(num_fila_excel, 6, fecha_actual_peru)
-        wb.save(ARCHIVO)
-    _leer_excel.clear()
+    
+    query = text("""
+        UPDATE registros
+        SET grupo_servicio = :grupo,
+            servicio = :servicio,
+            minutos = :minutos,
+            sexo = :sexo,
+            satisfaccion = :satisfaccion,
+            fecha_hora = :fecha_hora
+        WHERE id = :id
+    """)
+    
+    with conn.session as s:
+        s.execute(query, {
+            "id": int(id_registro),
+            "grupo": int(grupo),
+            "servicio": str(servicio),
+            "minutos": float(minutos),
+            "sexo": str(sexo),
+            "satisfaccion": str(satisfaccion),
+            "fecha_hora": fecha_actual_peru
+        })
+        s.commit()
 
 
 def intervalo_wilson(k, n, z=1.96):
@@ -240,6 +244,7 @@ def mostrar_semaforo_visual(serie_tiempos, tiempo_ideal=5.0):
     """
     st.markdown(html_semaforo, unsafe_allow_html=True)
 
+
 # ----------------------------------------------------------------------
 # PANTALLA 1: REGISTRO
 # ----------------------------------------------------------------------
@@ -266,9 +271,7 @@ def vista_registro():
                 minutos=tiempo,
                 satisfaccion='OPTIMO' if "Sí" in satisfaccion else 'REGULAR',
             )
-            st.success("¡Listo! Registro guardado de forma permanente en Excel con hora de Perú.")
-        except PermissionError:
-            st.error("No se pudo guardar: el Excel está abierto en otro programa. Ciérralo e inténtalo de nuevo.")
+            st.success("¡Listo! Registro guardado permanentemente en la nube con hora de Perú.")
         except Exception as e:
             st.error(f"No se pudo guardar el registro: {e}")
 
@@ -320,7 +323,7 @@ def vista_editar():
                                       ["Sí, OPTIMO 😊", "NO, hubo molestias 😞"],
                                       index=idx_sat)
 
-        guardar_cambios = st.form_submit_button("Actualizar Registro en Excel 💾", use_container_width=True)
+        guardar_cambios = st.form_submit_button("Actualizar Registro en la Nube 💾", use_container_width=True)
 
     if guardar_cambios:
         try:
@@ -332,10 +335,8 @@ def vista_editar():
                 minutos=nuevo_tiempo,
                 satisfaccion='OPTIMO' if "Sí" in nueva_satisfaccion else 'REGULAR',
             )
-            st.success(f"¡Registro #{id_registro} actualizado correctamente en Excel!")
+            st.success(f"¡Registro #{id_registro} actualizado correctamente!")
             st.rerun()
-        except PermissionError:
-            st.error("No se pudo actualizar: el archivo Excel está abierto en otro programa.")
         except Exception as e:
             st.error(f"Error al actualizar el registro: {e}")
 
@@ -345,6 +346,10 @@ def mostrar_ultimos():
     df = cargar_datos()
     st.caption(f"Total de clientes registrados: {len(df)}")
     
+    if len(df) == 0:
+        st.info("Aún no hay registros guardados.")
+        return
+
     cols_mostrar = [c for c in ['GRUPO DE SERVICIO', 'SERVICIO', 'Minutos', 'SEXO', 'SATISFACCION', 'FECHA_HORA'] if c in df.columns]
     df_visual = df[cols_mostrar].tail(5).iloc[::-1].copy()
     if 'Minutos' in df_visual.columns:
@@ -365,11 +370,14 @@ def vista_dashboard():
     st.caption(f"🔄 Actualización automática cada {REFRESCO} s · "
                f"Última lectura: {datetime.now(ZONA_PERU).strftime('%H:%M:%S')}")
 
+    if len(df) == 0:
+        st.warning("Registra al menos un cliente para visualizar el resumen.")
+        return
+
     tiempo_promedio = df['Minutos'].mean()
     felices = int(es_optimo(df['SATISFACCION']).sum())
     porcentaje_felices = felices / len(df) * 100
 
-        # Busca esta línea en vista_dashboard() y cámbiala por:
     mostrar_semaforo_visual(serie_tiempos=df['Minutos'], tiempo_ideal=REF_TIEMPO)
 
     col1, col2, col3 = st.columns(3)
@@ -381,7 +389,6 @@ def vista_dashboard():
     st.subheader("Comparación por Grupo de Servicio")
     df_grupos = df.groupby('GRUPO DE SERVICIO')['Minutos'].mean().reset_index()
     df_grupos['GRUPO DE SERVICIO'] = "Grupo " + df_grupos['GRUPO DE SERVICIO'].astype(int).astype(str)
-    
     df_grupos['Tiempo_Texto'] = df_grupos['Minutos'].apply(_formatear_minutos_a_mmss)
     
     fig1 = px.bar(df_grupos, x='GRUPO DE SERVICIO', y='Minutos',
@@ -415,14 +422,12 @@ def vista_inferencial():
         ci_time = (mean_time, mean_time)
 
     felices = int(es_optimo(df['SATISFACCION']).sum())
-
-    # Usamos tu función intervalo_wilson definida al inicio
     lo, hi = intervalo_wilson(felices, n_total, z=1.96)
     ci_prop = (lo * 100, hi * 100)
 
     t_inf_str = f"{_formatear_minutos_a_mmss(ci_time[0])} a {_formatear_minutos_a_mmss(ci_time[1])}"
     st.info(f"🕒 **Tiempo de atención:** Con un 95% de seguridad, el tiempo real promedio por cliente se encuentra entre **{t_inf_str} min**.")
-    st.info(f"😊 **Satisfacción del cliente:** Con un 95% de seguridad, el porcentaje real de clientes satisfechos está entre **{ci_prop[0]:.2f}% y {ci_prop[1]:.2f}%**.")
+    st.info(f"😊 **Satisfacción del cliente (Intervalo de Wilson):** Con un 95% de seguridad, el porcentaje real de clientes satisfechos está entre **{ci_prop[0]:.2f}% y {ci_prop[1]:.2f}%**.")
 
     st.divider()
 
@@ -476,15 +481,21 @@ def vista_inferencial():
 # ----------------------------------------------------------------------
 @st.fragment(run_every=REFRESCO)
 def vista_excel():
-    st.title("Base de datos en tiempo real")
+    st.title("Base de datos en tiempo real (Nube)")
     df = cargar_datos()
     st.caption(f"🔄 Actualización automática cada {REFRESCO} s · "
                f"{len(df)} registros · Última lectura: {datetime.now(ZONA_PERU).strftime('%H:%M:%S')}")
     st.dataframe(df, use_container_width=True)
 
-    with open(ARCHIVO, "rb") as f:
-        st.download_button("⬇️ Descargar Excel", f.read(), file_name="Datos.xlsx",
-                           mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+    buffer = io.BytesIO()
+    with pd.ExcelWriter(buffer, engine='openpyxl') as writer:
+        df.to_excel(writer, index=True, sheet_name='Registros')
+
+    st.download_button(
+        label="⬇️ Descargar respaldo en Excel",
+        data=buffer.getvalue(),
+        file_name=f"Datos_Imprenta_{datetime.now(ZONA_PERU).strftime('%Y%m%d')}.xlsx",
+
 
 
 # ----------------------------------------------------------------------
