@@ -495,6 +495,9 @@ def vista_excel():
         label="⬇️ Descargar respaldo en Excel",
         data=buffer.getvalue(),
         file_name=f"Datos_Imprenta_{datetime.now(ZONA_PERU).strftime('%Y%m%d')}.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
+
 
 
 
