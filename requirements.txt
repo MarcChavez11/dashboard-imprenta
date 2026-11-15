@@ -5,4 +5,4 @@ scipy
 numpy
 openpyxl
 SQLAlchemy
-psycopg2-binary
+psycopg[binary]
