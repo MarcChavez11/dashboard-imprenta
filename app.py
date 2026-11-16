@@ -15,7 +15,7 @@ from sqlalchemy import text
 REFRESCO = 5             # Segundos para actualización automática en pantalla
 ZONA_PERU = ZoneInfo("America/Lima")
 
-st.set_page_config(page_title="Imprenta Flores", layout="centered")
+st.set_page_config(page_title="Imprenta Flores", page_icon="logo.png", layout="centered")
 
 # Estilo de letra elegante (Tipografía general)
 st.markdown("""
@@ -33,6 +33,7 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
+st.logo("logo.png", size="large")
 st.sidebar.title("Imprenta Flores")
 menu = st.sidebar.radio("¿Qué deseas hacer?", [
     "⏱️ Registrar un cliente",
