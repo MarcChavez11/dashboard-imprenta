@@ -9,6 +9,13 @@ import scipy.stats as stats
 import numpy as np
 from sqlalchemy import text
 
+import os
+
+for nombre_logo in ["logo.png", "Logo.png", "logo.PNG", "logo.jpg"]:
+    if os.path.exists(nombre_logo):
+        st.logo(nombre_logo, size="large")
+        break
+
 # ----------------------------------------------------------------------
 # CONFIGURACIÓN - Base de datos en la nube (Neon / PostgreSQL)
 # ----------------------------------------------------------------------
