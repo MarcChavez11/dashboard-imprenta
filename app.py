@@ -1,4 +1,5 @@
 import io
+import time
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -78,11 +79,20 @@ REF_SAT = st.sidebar.number_input(
 # ----------------------------------------------------------------------
 # CONEXIÓN A BASE DE DATOS EN LA NUBE (NEON)
 # ----------------------------------------------------------------------
-conn = st.connection("postgresql", type="sql")
+# ----------------------------------------------------------------------
+# CONEXIÓN A BASE DE DATOS EN LA NUBE (NEON)
+# ----------------------------------------------------------------------
+conn = st.connection(
+    "postgresql",
+    type="sql",
+    pool_pre_ping=True,
+    pool_recycle=300
+)
 
 
+@st.cache_resource
 def inicializar_bd():
-    """Crea la tabla automáticamente en Neon si aún no existe."""
+    """Crea la tabla una sola vez y espera si Neon está despertando."""
     query_crear = text("""
         CREATE TABLE IF NOT EXISTS registros (
             id SERIAL PRIMARY KEY,
@@ -94,9 +104,14 @@ def inicializar_bd():
             fecha_hora VARCHAR(30) NOT NULL
         );
     """)
-    with conn.session as s:
-        s.execute(query_crear)
-        s.commit()
+    for intento in range(3):
+        try:
+            with conn.session as s:
+                s.execute(query_crear)
+                s.commit()
+            return True
+        except Exception:
+            time.sleep(2)
 
 
 inicializar_bd()
