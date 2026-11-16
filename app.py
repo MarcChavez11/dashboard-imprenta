@@ -48,13 +48,14 @@ menu = st.sidebar.radio("¿Qué deseas hacer?", [
 st.sidebar.markdown("---")
 st.sidebar.subheader("⚙️ Configuración de Metas")
 
-REF_TIEMPO = st.sidebar.number_input(
-    "Meta máx. de tiempo (min)", 
-    min_value=0.5, 
-    max_value=60.0, 
-    value=5.0, 
-    step=0.5, 
-    key="ref_tiempo"
+REF_TIEMPO_G1 = st.sidebar.number_input(
+    "Meta máx. Grupo 1: Copias (min)", 
+    min_value=0.5, max_value=60.0, value=2.0, step=0.5, key="ref_g1"
+)
+
+REF_TIEMPO_G2 = st.sidebar.number_input(
+    "Meta máx. Grupo 2: Trámites (min)", 
+    min_value=0.5, max_value=60.0, value=8.0, step=0.5, key="ref_g2"
 )
 
 REF_SAT = st.sidebar.number_input(
@@ -192,38 +193,49 @@ def es_optimo(serie):
 # ----------------------------------------------------------------------
 # COMPONENTE VISUAL: SEMÁFORO ESTADÍSTICO DE 3 LUCES
 # ----------------------------------------------------------------------
-def mostrar_semaforo_visual(serie_tiempos, tiempo_ideal=5.0):
+def _evaluar_grupo(serie_tiempos, meta, nombre_grupo):
     n = len(serie_tiempos)
-    tiempo_promedio = serie_tiempos.mean() if n > 0 else 0.0
-    std_time = serie_tiempos.std() if n > 1 else 0.0
+    media = serie_tiempos.mean() if n > 0 else 0.0
+    std = serie_tiempos.std() if n > 1 else 0.0
 
-    # Lógica basada en Prueba de Hipótesis (t de Student, alpha = 0.05)
-    if n < 2 or std_time == 0:
-        estado = "amarillo"
-        titulo = "🟡 DATOS INSUFICIENTES"
-        desc = f"Promedio actual: **{tiempo_promedio:.2f} min**. Se necesitan más datos variables para validar la meta estadísticamente."
+    if n < 5 or std == 0:
+        return "WARN", f"{nombre_grupo}: muestra insuficiente ({n} datos, prom. {media:.2f} min)."
+
+    # Prueba t de dos colas para detectar si es significativamente menor o mayor a la meta
+    _, p_val = stats.ttest_1samp(serie_tiempos, meta)
+
+    if media < meta and p_val < 0.05:
+        return "OK", f"{nombre_grupo}: óptimo ({media:.2f} min < {meta:.1f} min, p={p_val:.3f})."
+    elif media > meta and p_val < 0.05:
+        return "CRIT", f"{nombre_grupo}: crítico ({media:.2f} min > {meta:.1f} min, p={p_val:.3f})."
     else:
-        t_stat, p_val = stats.ttest_1samp(serie_tiempos, tiempo_ideal)
+        return "WARN", f"{nombre_grupo}: en precaución ({media:.2f} min vs meta {meta:.1f} min, p={p_val:.3f})."
 
-        if tiempo_promedio < tiempo_ideal and p_val < 0.05:
-            estado = "verde"
-            titulo = "🟢 ESTADO ÓPTIMO (COMPROBADO)"
-            desc = f"Promedio de **{tiempo_promedio:.2f} min** (p = {p_val:.3f}). Hay evidencia estadística de que cumples la meta (< {tiempo_ideal:.1f} min)."
-        elif tiempo_promedio > tiempo_ideal and p_val < 0.05:
-            estado = "rojo"
-            titulo = "🔴 ESTADO CRÍTICO (DEMORADO)"
-            desc = f"Promedio de **{tiempo_promedio:.2f} min** (p = {p_val:.3f}). Se confirma estadísticamente que superas el límite de {tiempo_ideal:.1f} min."
-        else:
-            estado = "amarillo"
-            titulo = "🟡 ZONA NEUTRA / PRECAUCIÓN"
-            desc = f"Promedio de **{tiempo_promedio:.2f} min** (p = {p_val:.3f}). Estadísticamente en el límite de la meta ({tiempo_ideal:.1f} min); requiere vigilancia."
+
+def mostrar_semaforo_visual(df, meta_g1=2.0, meta_g2=8.0):
+    g1_tiempos = df[df['GRUPO DE SERVICIO'] == 1]['Minutos']
+    g2_tiempos = df[df['GRUPO DE SERVICIO'] == 2]['Minutos']
+
+    est1, msg1 = _evaluar_grupo(g1_tiempos, meta_g1, "Grupo 1 (Copias)")
+    est2, msg2 = _evaluar_grupo(g2_tiempos, meta_g2, "Grupo 2 (Trámites)")
+
+    # Regla del peor grupo (Cuello de botella)
+    if "CRIT" in (est1, est2):
+        estado = "rojo"
+        titulo = "🔴 ESTADO CRÍTICO (CUELLO DE BOTELLA)"
+    elif "WARN" in (est1, est2):
+        estado = "amarillo"
+        titulo = "🟡 PRECAUCIÓN / EN OBSERVACIÓN"
+    else:
+        estado = "verde"
+        titulo = "🟢 TODOS LOS SERVICIOS ÓPTIMOS"
+
+    desc = f"{msg1}<br>{msg2}"
 
     c_rojo = "#ff4d4d" if estado == "rojo" else "#4d1a1a"
     op_rojo = "1" if estado == "rojo" else "0.3"
-
     c_amarillo = "#ffcc00" if estado == "amarillo" else "#4d4d00"
     op_amarillo = "1" if estado == "amarillo" else "0.3"
-
     c_verde = "#2ecc71" if estado == "verde" else "#143d21"
     op_verde = "1" if estado == "verde" else "0.3"
 
@@ -243,6 +255,7 @@ def mostrar_semaforo_visual(serie_tiempos, tiempo_ideal=5.0):
     </div>
     """
     st.markdown(html_semaforo, unsafe_allow_html=True)
+
 
 
 # ----------------------------------------------------------------------
@@ -378,7 +391,7 @@ def vista_dashboard():
     felices = int(es_optimo(df['SATISFACCION']).sum())
     porcentaje_felices = felices / len(df) * 100
 
-    mostrar_semaforo_visual(serie_tiempos=df['Minutos'], tiempo_ideal=REF_TIEMPO)
+    mostrar_semaforo_visual(df=df, meta_g1=REF_TIEMPO_G1, meta_g2=REF_TIEMPO_G2)
 
     col1, col2, col3 = st.columns(3)
     col1.metric("Clientes atendidos", len(df))
@@ -461,12 +474,14 @@ def vista_inferencial():
     st.divider()
 
     st.subheader("3. Evaluación de Metas del Negocio")
-    if std_time > 0:
-        _, p_val = stats.ttest_1samp(df['Minutos'], REF_TIEMPO, alternative='less')
-        if p_val < 0.05:
-            st.success(f"🟢 **Meta de Tiempo Cumplida:** Promedio por debajo de {REF_TIEMPO} min.")
-        else:
-            st.error(f"🔴 **Meta de Tiempo No Superada.**")
+    for num_g, meta_g, nombre_g in [(1, REF_TIEMPO_G1, "Grupo 1"), (2, REF_TIEMPO_G2, "Grupo 2")]:
+        sub = df[df['GRUPO DE SERVICIO'] == num_g]['Minutos']
+        if len(sub) > 1 and sub.std() > 0:
+            _, p_val = stats.ttest_1samp(sub, meta_g, alternative='less')
+            if p_val < 0.05:
+                st.success(f"🟢 **Meta {nombre_g} Cumplida:** Promedio por debajo de {meta_g} min (p={p_val:.3f}).")
+            else:
+                st.error(f"🔴 **Meta {nombre_g} No Superada:** Promedio no es menor a {meta_g} min (p={p_val:.3f}).")
 
     p_0 = REF_SAT / 100
     p_val_prop = stats.binomtest(felices, n_total, p_0, alternative='greater').pvalue
