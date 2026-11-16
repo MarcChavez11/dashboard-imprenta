@@ -212,49 +212,47 @@ def _evaluar_grupo(serie_tiempos, meta, nombre_grupo):
         return "WARN", f"{nombre_grupo}: en precaución ({media:.2f} min vs meta {meta:.1f} min, p={p_val:.3f})."
 
 
+def _tarjeta_semaforo_individual(serie_tiempos, meta, titulo_grupo):
+    estado, mensaje = _evaluar_grupo(serie_tiempos, meta, titulo_grupo)
+
+    if estado == "CRIT":
+        color_luz, titulo_estado = "rojo", "🔴 CRÍTICO"
+    elif estado == "WARN":
+        color_luz, titulo_estado = "amarillo", "🟡 PRECAUCIÓN"
+    else:
+        color_luz, titulo_estado = "verde", "🟢 ÓPTIMO"
+
+    c_rojo = "#ff4d4d" if color_luz == "rojo" else "#4d1a1a"
+    op_rojo = "1" if color_luz == "rojo" else "0.3"
+    c_amarillo = "#ffcc00" if color_luz == "amarillo" else "#4d4d00"
+    op_amarillo = "1" if color_luz == "amarillo" else "0.3"
+    c_verde = "#2ecc71" if color_luz == "verde" else "#143d21"
+    op_verde = "1" if color_luz == "verde" else "0.3"
+
+    return f"""
+    <div style="padding: 15px; border-radius: 12px; border: 1px solid rgba(128,128,128,0.3); text-align: center; height: 100%;">
+        <h4 style="margin: 0 0 10px 0; font-size: 16px;">{titulo_grupo}</h4>
+        <div style="display: inline-flex; gap: 10px; background: rgba(0,0,0,0.1); padding: 8px 14px; border-radius: 25px; border: 2px solid rgba(128,128,128,0.4); margin-bottom: 10px;">
+            <div style="width: 24px; height: 24px; background-color: {c_rojo}; opacity: {op_rojo}; border-radius: 50%; box-shadow: 0 0 {'12px ' + c_rojo if color_luz=='rojo' else 'none'};"></div>
+            <div style="width: 24px; height: 24px; background-color: {c_amarillo}; opacity: {op_amarillo}; border-radius: 50%; box-shadow: 0 0 {'12px ' + c_amarillo if color_luz=='amarillo' else 'none'};"></div>
+            <div style="width: 24px; height: 24px; background-color: {c_verde}; opacity: {op_verde}; border-radius: 50%; box-shadow: 0 0 {'12px ' + c_verde if color_luz=='verde' else 'none'};"></div>
+        </div>
+        <div style="font-weight: 700; font-size: 15px; margin-bottom: 4px;">{titulo_estado}</div>
+        <p style="margin: 0; font-size: 13px; opacity: 0.85;">{mensaje}</p>
+    </div>
+    """
+
+
 def mostrar_semaforo_visual(df, meta_g1=2.0, meta_g2=8.0):
     g1_tiempos = df[df['GRUPO DE SERVICIO'] == 1]['Minutos']
     g2_tiempos = df[df['GRUPO DE SERVICIO'] == 2]['Minutos']
 
-    est1, msg1 = _evaluar_grupo(g1_tiempos, meta_g1, "Grupo 1 (Copias)")
-    est2, msg2 = _evaluar_grupo(g2_tiempos, meta_g2, "Grupo 2 (Trámites)")
-
-    # Regla del peor grupo (Cuello de botella)
-    if "CRIT" in (est1, est2):
-        estado = "rojo"
-        titulo = "🔴 ESTADO CRÍTICO (CUELLO DE BOTELLA)"
-    elif "WARN" in (est1, est2):
-        estado = "amarillo"
-        titulo = "🟡 PRECAUCIÓN / EN OBSERVACIÓN"
-    else:
-        estado = "verde"
-        titulo = "🟢 TODOS LOS SERVICIOS ÓPTIMOS"
-
-    desc = f"{msg1}<br>{msg2}"
-
-    c_rojo = "#ff4d4d" if estado == "rojo" else "#4d1a1a"
-    op_rojo = "1" if estado == "rojo" else "0.3"
-    c_amarillo = "#ffcc00" if estado == "amarillo" else "#4d4d00"
-    op_amarillo = "1" if estado == "amarillo" else "0.3"
-    c_verde = "#2ecc71" if estado == "verde" else "#143d21"
-    op_verde = "1" if estado == "verde" else "0.3"
-
-    html_semaforo = f"""
-    <div style="padding: 20px; border-radius: 12px; border: 1px solid rgba(128,128,128,0.3); margin-bottom: 20px; display: flex; align-items: center; justify-content: space-around;">
-        <div style="text-align: center;">
-            <div style="display: flex; gap: 12px; background: rgba(0,0,0,0.1); padding: 10px 18px; border-radius: 30px; border: 2px solid rgba(128,128,128,0.4); box-shadow: inset 0 0 10px rgba(0,0,0,0.3);">
-                <div style="width: 30px; height: 30px; background-color: {c_rojo}; opacity: {op_rojo}; border-radius: 50%; box-shadow: 0 0 { '15px ' + c_rojo if estado=='rojo' else 'none'};"></div>
-                <div style="width: 30px; height: 30px; background-color: {c_amarillo}; opacity: {op_amarillo}; border-radius: 50%; box-shadow: 0 0 { '15px ' + c_amarillo if estado=='amarillo' else 'none'};"></div>
-                <div style="width: 30px; height: 30px; background-color: {c_verde}; opacity: {op_verde}; border-radius: 50%; box-shadow: 0 0 { '15px ' + c_verde if estado=='verde' else 'none'};"></div>
-            </div>
-        </div>
-        <div style="flex-grow: 1; margin-left: 20px;">
-            <h4 style="margin: 0 0 5px 0; font-size: 18px;">{titulo}</h4>
-            <p style="margin: 0; font-size: 14px; opacity: 0.85;">{desc}</p>
-        </div>
-    </div>
-    """
-    st.markdown(html_semaforo, unsafe_allow_html=True)
+    col_g1, col_g2 = st.columns(2)
+    with col_g1:
+        st.markdown(_tarjeta_semaforo_individual(g1_tiempos, meta_g1, "Grupo 1: Copias"), unsafe_allow_html=True)
+    with col_g2:
+        st.markdown(_tarjeta_semaforo_individual(g2_tiempos, meta_g2, "Grupo 2: Trámites"), unsafe_allow_html=True)
+    st.write("")  # Pequeño espacio inferior
 
 
 
