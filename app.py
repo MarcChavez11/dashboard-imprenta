@@ -48,8 +48,6 @@ st.markdown("""
 if logo_path:
     st.sidebar.image(logo_path, width=220)
 
-
-st.logo("logo.png", size="large")
 st.sidebar.title("Imprenta Flores")
 menu = st.sidebar.radio("¿Qué deseas hacer?", [
     "⏱️ Registrar un cliente",
