@@ -468,7 +468,18 @@ def vista_inferencial():
 
     st.divider()
 
-    st.subheader("2. Comparación entre Grupos de Servicio")
+    
+    p_0 = REF_SAT / 100
+    p_val_prop = stats.binomtest(felices, n_total, p_0, alternative='greater').pvalue
+    if p_val_prop < 0.05:
+        st.success(f"🟢 **Meta de Satisfacción Cumplida:** Supera el {REF_SAT}%.")
+    else:
+        st.error(f"🔴 **Meta de Satisfacción No Alcanzada.**")
+
+
+# ----------------------------------------------------------------------
+# PANTALLA 4: TABLA Y DESCARGA
+# ----------------------------------------------------------------    st.subheader("2. Comparación entre Grupos de Servicio")
     g1 = df[df['GRUPO DE SERVICIO'] == 1]
     g2 = df[df['GRUPO DE SERVICIO'] == 2]
 
@@ -485,39 +496,41 @@ def vista_inferencial():
         else:
             ci_m = (diff_mean, diff_mean)
 
+        min_diff = min(abs(ci_m[0]), abs(ci_m[1]))
+        max_diff = max(abs(ci_m[0]), abs(ci_m[1]))
+        rango_str = f"{_formatear_minutos_a_mmss(min_diff)} a {_formatear_minutos_a_mmss(max_diff)} min"
+
         if ci_m[1] < 0:
-            concl = "El **Grupo 1** es significativamente más rápido."
+            st.success(f"⚡ **Velocidad de atención:** El **Grupo 1 (Copias)** es significativamente más rápido que el Grupo 2 por un margen de **{rango_str}**.")
         elif ci_m[0] > 0:
-            concl = "El **Grupo 2** es significativamente más rápido."
+            st.success(f"⚡ **Velocidad de atención:** El **Grupo 2 (Trámites)** es significativamente más rápido que el Grupo 1 por un margen de **{rango_str}**.")
         else:
-            concl = "No hay diferencia de velocidad importante."
-        st.success(f"⚖️ **Diferencia de tiempos:** Entre {ci_m[0]:.2f} a {ci_m[1]:.2f} min. {concl}")
+            st.info("⚖️ **Velocidad de atención:** Ambos grupos mantienen un ritmo similar sin diferencias significativas.")
+
+        if min(n1, n2) < 10:
+            st.warning(f"⚠️ Nota: Uno de los grupos tiene pocas atenciones registradas ({min(n1, n2)}). Los resultados serán más exactos conforme registres más clientes.")
     else:
         st.warning("Se necesitan al menos 2 datos en cada grupo para comparar.")
 
     st.divider()
 
     st.subheader("3. Evaluación de Metas del Negocio")
-    for num_g, meta_g, nombre_g in [(1, REF_TIEMPO_G1, "Grupo 1"), (2, REF_TIEMPO_G2, "Grupo 2")]:
+    for num_g, meta_g, nombre_g in [(1, REF_TIEMPO_G1, "Grupo 1 (Copias)"), (2, REF_TIEMPO_G2, "Grupo 2 (Trámites)")]:
         sub = df[df['GRUPO DE SERVICIO'] == num_g]['Minutos']
         if len(sub) > 1 and sub.std() > 0:
             _, p_val = stats.ttest_1samp(sub, meta_g, alternative='less')
             if p_val < 0.05:
-                st.success(f"🟢 **Meta {nombre_g} Cumplida:** Promedio por debajo de {meta_g} min (p={p_val:.3f}).")
+                st.success(f"🟢 **Meta {nombre_g} Cumplida:** El tiempo de atención está comprobado por debajo de {meta_g:.1f} min.")
             else:
-                st.error(f"🔴 **Meta {nombre_g} No Superada:** Promedio no es menor a {meta_g} min (p={p_val:.3f}).")
+                st.error(f"🔴 **Meta {nombre_g} No Superada:** Aún no se logra bajar consistentemente de los {meta_g:.1f} min.")
 
     p_0 = REF_SAT / 100
     p_val_prop = stats.binomtest(felices, n_total, p_0, alternative='greater').pvalue
     if p_val_prop < 0.05:
-        st.success(f"🟢 **Meta de Satisfacción Cumplida:** Supera el {REF_SAT}%.")
+        st.success(f"🟢 **Meta de Satisfacción Cumplida:** Superas con éxito el {REF_SAT}% de clientes contentos.")
     else:
-        st.error(f"🔴 **Meta de Satisfacción No Alcanzada.**")
-
-
-# ----------------------------------------------------------------------
-# PANTALLA 4: TABLA Y DESCARGA
-# ----------------------------------------------------------------------
+        st.error(f"🔴 **Meta de Satisfacción No Alcanzada:** Aún no se supera de forma estable el {REF_SAT}% de clientes contentos.")
+------
 @st.fragment(run_every=REFRESCO)
 def vista_excel():
     st.title("Base de datos en tiempo real (Nube)")
