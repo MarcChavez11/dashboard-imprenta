@@ -464,7 +464,9 @@ def vista_inferencial():
     st.info(f"😊 **Satisfacción del cliente:** Con un 95% de seguridad, el porcentaje real de clientes satisfechos está entre **{ci_prop[0]:.2f}% y {ci_prop[1]:.2f}%**.")
 
     st.divider()
-
+    
+    st.subheader("2. Comparación entre Grupos de Servicio")
+    
     g1 = df[df['GRUPO DE SERVICIO'] == 1]
     g2 = df[df['GRUPO DE SERVICIO'] == 2]
 
@@ -515,12 +517,13 @@ def vista_inferencial():
         st.success(f"🟢 **Meta de Satisfacción Cumplida:** Superas con éxito el {REF_SAT}% de clientes contentos.")
     else:
         st.error(f"🔴 **Meta de Satisfacción No Alcanzada:** Aún no se supera de forma estable el {REF_SAT}% de clientes contentos.")
-------
-@st.fragment(run_every=REFRESCO)
 
 # ----------------------------------------------------------------------
 # PANTALLA 4: TABLA Y DESCARGA
-# ----------------------------------------------------------------    st.subheader("2. Comparación entre Grupos de Servicio")
+# ----------------------------------------------------------------
+
+@st.fragment(run_every=REFRESCO)
+
 
 def vista_excel():
     st.title("Base de datos en tiempo real (Nube)")
