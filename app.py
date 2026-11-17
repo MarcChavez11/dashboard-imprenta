@@ -47,7 +47,7 @@ menu = st.sidebar.radio("¿Qué deseas hacer?", [
     "⏱️ Registrar un cliente",
     "✏️ Editar un registro",
     "📊 Dashboard Descriptivo",
-    "📈 Análisis Inferencial",
+    "📈 Análisis del negocio",
     "🛠️ Modo Ingeniero (Ver Excel)"
 ])
 
@@ -435,7 +435,7 @@ def vista_dashboard():
 # ----------------------------------------------------------------------
 @st.fragment(run_every=REFRESCO)
 def vista_inferencial():
-    st.title("Análisis Estadístico del Negocio")
+    st.title("Análisis del Negocio")
     st.caption(f"🔄 Actualización automática cada {REFRESCO} s · "
                f"Última lectura: {datetime.now(ZONA_PERU).strftime('%H:%M:%S')}")
 
