@@ -46,7 +46,7 @@ st.markdown("""
 """, unsafe_allow_html=True)
 
 if logo_path:
-    st.logo(logo_path, size="large")
+    st.sidebar.image(logo_path, width=220)
 
 
 st.logo("logo.png", size="large")
