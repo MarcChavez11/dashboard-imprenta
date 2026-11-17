@@ -523,8 +523,6 @@ def vista_inferencial():
 # ----------------------------------------------------------------
 
 @st.fragment(run_every=REFRESCO)
-
-
 def vista_excel():
     st.title("Base de datos en tiempo real (Nube)")
     df = cargar_datos()
