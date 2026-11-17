@@ -19,8 +19,6 @@ import os
 REFRESCO = 5             # Segundos para actualización automática en pantalla
 ZONA_PERU = ZoneInfo("America/Lima")
 
-st.set_page_config(page_title="Imprenta Flores", page_icon="logo.png", layout="centered")
-
 logo_path = next((f for f in ["logo.png", "Logo.png", "logo.PNG", "logo.jpg"] if os.path.exists(f)), None)
 
 st.set_page_config(
@@ -467,18 +465,6 @@ def vista_inferencial():
 
     st.divider()
 
-    
-    p_0 = REF_SAT / 100
-    p_val_prop = stats.binomtest(felices, n_total, p_0, alternative='greater').pvalue
-    if p_val_prop < 0.05:
-        st.success(f"🟢 **Meta de Satisfacción Cumplida:** Supera el {REF_SAT}%.")
-    else:
-        st.error(f"🔴 **Meta de Satisfacción No Alcanzada.**")
-
-
-# ----------------------------------------------------------------------
-# PANTALLA 4: TABLA Y DESCARGA
-# ----------------------------------------------------------------    st.subheader("2. Comparación entre Grupos de Servicio")
     g1 = df[df['GRUPO DE SERVICIO'] == 1]
     g2 = df[df['GRUPO DE SERVICIO'] == 2]
 
@@ -531,6 +517,11 @@ def vista_inferencial():
         st.error(f"🔴 **Meta de Satisfacción No Alcanzada:** Aún no se supera de forma estable el {REF_SAT}% de clientes contentos.")
 ------
 @st.fragment(run_every=REFRESCO)
+
+# ----------------------------------------------------------------------
+# PANTALLA 4: TABLA Y DESCARGA
+# ----------------------------------------------------------------    st.subheader("2. Comparación entre Grupos de Servicio")
+
 def vista_excel():
     st.title("Base de datos en tiempo real (Nube)")
     df = cargar_datos()
