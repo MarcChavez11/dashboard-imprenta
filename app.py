@@ -12,10 +12,6 @@ from sqlalchemy import text
 
 import os
 
-for nombre_logo in ["logo.png", "Logo.png", "logo.PNG", "logo.jpg"]:
-    if os.path.exists(nombre_logo):
-        st.logo(nombre_logo, size="large")
-        break
 
 # ----------------------------------------------------------------------
 # CONFIGURACIÓN - Base de datos en la nube (Neon / PostgreSQL)
@@ -24,6 +20,14 @@ REFRESCO = 5             # Segundos para actualización automática en pantalla
 ZONA_PERU = ZoneInfo("America/Lima")
 
 st.set_page_config(page_title="Imprenta Flores", page_icon="logo.png", layout="centered")
+
+logo_path = next((f for f in ["logo.png", "Logo.png", "logo.PNG", "logo.jpg"] if os.path.exists(f)), None)
+
+st.set_page_config(
+    page_title="Imprenta Flores",
+    page_icon=logo_path if logo_path else "🖨️",
+    layout="centered"
+)
 
 # Estilo de letra elegante (Tipografía general)
 st.markdown("""
@@ -40,6 +44,10 @@ st.markdown("""
     }
 </style>
 """, unsafe_allow_html=True)
+
+if logo_path:
+    st.logo(logo_path, size="large")
+
 
 st.logo("logo.png", size="large")
 st.sidebar.title("Imprenta Flores")
@@ -76,9 +84,6 @@ REF_SAT = st.sidebar.number_input(
     key="ref_sat"
 )
 
-# ----------------------------------------------------------------------
-# CONEXIÓN A BASE DE DATOS EN LA NUBE (NEON)
-# ----------------------------------------------------------------------
 # ----------------------------------------------------------------------
 # CONEXIÓN A BASE DE DATOS EN LA NUBE (NEON)
 # ----------------------------------------------------------------------
