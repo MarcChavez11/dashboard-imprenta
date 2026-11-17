@@ -225,17 +225,16 @@ def _evaluar_grupo(serie_tiempos, meta, nombre_grupo):
     std = serie_tiempos.std() if n > 1 else 0.0
 
     if n < 5 or std == 0:
-        return "WARN", f"{nombre_grupo}: muestra insuficiente ({n} datos, prom. {media:.2f} min)."
+        return "WARN", f"Faltan más registros para evaluar (actual: {_formatear_minutos_a_mmss(media)} min con {n} atenciones)."
 
-    # Prueba t de dos colas para detectar si es significativamente menor o mayor a la meta
     _, p_val = stats.ttest_1samp(serie_tiempos, meta)
 
     if media < meta and p_val < 0.05:
-        return "OK", f"{nombre_grupo}: óptimo ({media:.2f} min < {meta:.1f} min, p={p_val:.3f})."
+        return "OK", f"Excelente ritmo: promedio de {_formatear_minutos_a_mmss(media)} min (meta: ≤ {meta:.1f} min)."
     elif media > meta and p_val < 0.05:
-        return "CRIT", f"{nombre_grupo}: crítico ({media:.2f} min > {meta:.1f} min, p={p_val:.3f})."
+        return "CRIT", f"Demora detectada: promedio de {_formatear_minutos_a_mmss(media)} min (supera los {meta:.1f} min)."
     else:
-        return "WARN", f"{nombre_grupo}: en precaución ({media:.2f} min vs meta {meta:.1f} min, p={p_val:.3f})."
+        return "WARN", f"En observación: promedio de {_formatear_minutos_a_mmss(media)} min (cerca del límite de {meta:.1f} min)."
 
 
 def _tarjeta_semaforo_individual(serie_tiempos, meta, titulo_grupo):
