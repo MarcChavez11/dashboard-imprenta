@@ -524,7 +524,7 @@ def vista_inferencial():
 
 @st.fragment(run_every=REFRESCO)
 def vista_excel():
-    st.title("Base de datos en tiempo real (Nube)")
+    st.title("Base de datos en tiempo real")
     df = cargar_datos()
     st.caption(f"🔄 Actualización automática cada {REFRESCO} s · "
                f"{len(df)} registros · Última lectura: {datetime.now(ZONA_PERU).strftime('%H:%M:%S')}")
