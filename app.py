@@ -81,6 +81,36 @@ REF_SAT = st.sidebar.number_input(
 )
 
 # ----------------------------------------------------------------------
+# CATÁLOGO DE SERVICIOS POR GRUPO (Imprenta Flores)
+# ----------------------------------------------------------------------
+SERVICIOS_POR_GRUPO = {
+    1: [
+        "Copias (B/N - Color)",
+        "Impresiones A4 / A3 (B/N - Color)",
+        "Ploteos (A0 - A1 - A2 - A3)",
+        "Escaneos",
+        "Anillados",
+        "Empastados",
+        "Enmicados",
+        "Otro servicio rápido (especificar)",
+    ],
+    2: [
+        "Fotos",
+        "Trámites RENIEC",
+        "Partidas (Nacimiento / Defunción / Matrimonio)",
+        "Boletín Informativo",
+        "Antecedentes (Policiales / Penales / Judiciales)",
+        "Trámites INPE",
+        "Trámites SUNAT",
+        "Trámites MTC",
+        "Trámites SUNARP",
+        "Trámites OSCE",
+        "Carnet de Sanidad",
+        "Otro trámite documental (especificar)",
+    ],
+}
+
+# ----------------------------------------------------------------------
 # CONEXIÓN A BASE DE DATOS EN LA NUBE (NEON)
 # ----------------------------------------------------------------------
 conn = st.connection(
