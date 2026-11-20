@@ -501,7 +501,7 @@ def vista_editar():
             )
 
             guardar_cambios = st.form_submit_button(
-                "Actualizar Registro en la Nube 💾", use_container_width=True
+                "Actualizar Registro 💾", use_container_width=True
             )
 
     if guardar_cambios:
