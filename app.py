@@ -523,8 +523,7 @@ def vista_inferencial():
 # ----------------------------------------------------------------
 
 @st.fragment(run_every=REFRESCO)
-def vista_excel():
-    st.title("Base de datos en tiempo real")
+def mostrar_tabla_ingeniero():
     df = cargar_datos()
     st.caption(f"🔄 Actualización automática cada {REFRESCO} s · "
                f"{len(df)} registros · Última lectura: {datetime.now(ZONA_PERU).strftime('%H:%M:%S')}")
@@ -538,9 +537,46 @@ def vista_excel():
         label="⬇️ Descargar respaldo en Excel",
         data=buffer.getvalue(),
         file_name=f"Datos_Imprenta_{datetime.now(ZONA_PERU).strftime('%Y%m%d')}.xlsx",
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        use_container_width=True
     )
 
+
+def vista_excel():
+    st.title("Base de datos en tiempo real")
+    mostrar_tabla_ingeniero()
+
+    st.divider()
+    st.subheader("🧹 Mantenimiento de Base de Datos")
+
+    if "confirmar_borrado" not in st.session_state:
+        st.session_state.confirmar_borrado = False
+
+    if not st.session_state.confirmar_borrado:
+        if st.button("🗑️ BORRAR REGISTROS", type="secondary", use_container_width=True):
+            st.session_state.confirmar_borrado = True
+            st.rerun()
+    else:
+        st.warning(
+            "⚠️ **¡ATENCIÓN! Utiliza este botón con cuidado.**\n\n"
+            "¿Seguro que quieres borrar **TODOS** los registros de la base de datos? "
+            "Recuerda haber descargado el respaldo en Excel antes de continuar, ya que esta acción **no se puede deshacer**."
+        )
+        col_si, col_no = st.columns(2)
+        with col_si:
+            if st.button("✅ Sí, borrar todo definitivamente", type="primary", use_container_width=True):
+                try:
+                    borrar_todos_los_registros()
+                    st.session_state.confirmar_borrado = False
+                    st.success("Base de datos limpiada correctamente. Lista para nuevos registros.")
+                    time.sleep(1.5)
+                    st.rerun()
+                except Exception as e:
+                    st.error(f"No se pudieron borrar los registros: {e}")
+        with col_no:
+            if st.button("❌ Cancelar", use_container_width=True):
+                st.session_state.confirmar_borrado = False
+                st.rerun()
 
 
 
