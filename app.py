@@ -312,37 +312,80 @@ def mostrar_semaforo_visual(df, meta_g1=2.0, meta_g2=8.0):
 # ----------------------------------------------------------------------
 # PANTALLA 1: REGISTRO
 # ----------------------------------------------------------------------
+# ----------------------------------------------------------------------
+# PANTALLA 1: REGISTRO
+# ----------------------------------------------------------------------
 def vista_registro():
     st.title("Registrar Atención")
 
-    with st.form("registro_sencillo", clear_on_submit=True):
-        grupo = st.radio("¿Qué tipo de servicio fue?",
-                         ["Grupo 1 (Copias/Impresiones)", "Grupo 2 (Trámites/Pasaporte)"])
-        servicio = st.text_input("¿Qué servicio exacto fue? (Ej. Copia, Foto, Pasaporte)")
-        sexo = st.radio("Sexo del cliente:", ["F", "M"], horizontal=True)
-        tiempo = st.number_input("¿Cuántos minutos demoró en total?",
-                                 min_value=0.1, value=1.0, step=0.5)
-        satisfaccion = st.radio("¿El cliente se fue contento con el servicio?",
-                                ["Sí, OPTIMO 😊", "NO, hubo molestias 😞"])
-        enviar = st.form_submit_button("Guardar en el sistema ✔️", use_container_width=True)
+    with st.container(border=True):
+        # 1. Selector de Grupo (fuera de st.form para actualizar el desplegable al instante)
+        grupo = st.radio(
+            "¿Qué tipo de servicio fue?",
+            [
+                "Grupo 1: Servicios de atención rápida",
+                "Grupo 2: Servicios de gestión documental",
+            ],
+            key="registro_grupo",
+        )
+        grupo_num = 1 if "Grupo 1" in grupo else 2
+
+        # 2. Desplegable dinámico según el grupo elegido
+        servicio_sel = st.selectbox(
+            "¿Qué servicio exacto fue?",
+            options=SERVICIOS_POR_GRUPO[grupo_num],
+            key=f"registro_servicio_g{grupo_num}",
+        )
+
+        # Campo condicional solo si el usuario elige "Otro..."
+        if "Otro" in servicio_sel:
+            servicio_custom = st.text_input(
+                "Especifica el servicio:",
+                placeholder="Ej. Tipeo, Pasaporte, etc.",
+                key="registro_servicio_otro",
+            )
+            servicio_final = servicio_custom.strip()
+        else:
+            servicio_final = servicio_sel
+
+        # 3. Resto del formulario
+        with st.form("registro_sencillo", clear_on_submit=True):
+            sexo = st.radio("Sexo del cliente:", ["F", "M"], horizontal=True)
+            tiempo = st.number_input(
+                "¿Cuántos minutos demoró en total?",
+                min_value=0.1,
+                value=1.0,
+                step=0.5,
+            )
+            satisfaccion = st.radio(
+                "¿El cliente se fue contento con el servicio?",
+                ["Sí, OPTIMO 😊", "NO, hubo molestias 😞"],
+            )
+            enviar = st.form_submit_button(
+                "Guardar en el sistema ✔️", use_container_width=True
+            )
 
     if enviar:
-        try:
-            guardar_registro(
-                grupo=1 if "Grupo 1" in grupo else 2,
-                servicio=servicio.strip() if servicio.strip() else "Varios",
-                sexo=sexo,
-                minutos=tiempo,
-                satisfaccion='OPTIMO' if "Sí" in satisfaccion else 'REGULAR',
-            )
-            st.success("¡Listo! Registro guardado permanentemente en la nube con hora de Perú.")
-        except Exception as e:
-            st.error(f"No se pudo guardar el registro: {e}")
+        if "Otro" in servicio_sel and not servicio_final:
+            st.warning("⚠️ Por favor escribe el nombre del servicio antes de guardar.")
+        else:
+            try:
+                guardar_registro(
+                    grupo=grupo_num,
+                    servicio=servicio_final,
+                    sexo=sexo,
+                    minutos=tiempo,
+                    satisfaccion="OPTIMO" if "Sí" in satisfaccion else "REGULAR",
+                )
+                st.success(
+                    "¡Listo! Registro guardado permanentemente en la nube con hora de Perú."
+                )
+            except Exception as e:
+                st.error(f"No se pudo guardar el registro: {e}")
 
     st.divider()
     st.subheader("Últimos registros")
     mostrar_ultimos()
-
 
 # ----------------------------------------------------------------------
 # PANTALLA: EDITAR UN REGISTRO
