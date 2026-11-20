@@ -52,7 +52,7 @@ menu = st.sidebar.radio("¿Qué deseas hacer?", [
     "✏️ Editar un registro",
     "📊 Dashboard Descriptivo",
     "📈 Análisis del negocio",
-    "🛠️ Modo Ingeniero (Ver Excel)"
+    "🛠️ Ver Excel"
 ])
 
 # ----------------------------------------------------------------------
