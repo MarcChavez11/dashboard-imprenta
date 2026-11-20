@@ -398,54 +398,99 @@ def vista_editar():
         st.warning("No hay registros disponibles para editar.")
         return
 
-    opciones = [f"Registro #{idx} - {row['SERVICIO']} ({row['Minutos']:.2f} min)" for idx, row in df.iterrows()]
+    opciones = [
+        f"Registro #{idx} - {row['SERVICIO']} ({row['Minutos']:.2f} min)"
+        for idx, row in df.iterrows()
+    ]
     seleccion = st.selectbox("Selecciona el registro que deseas modificar:", opciones)
     id_registro = int(seleccion.split("#")[1].split(" -")[0])
 
     registro_actual = df.loc[id_registro]
-    grupo_previo = int(registro_actual['GRUPO DE SERVICIO'])
-    servicio_previo = str(registro_actual['SERVICIO'])
-    sexo_previo = str(registro_actual['SEXO'])
-    minutos_previos = float(registro_actual['Minutos'])
-    sat_previa = str(registro_actual['SATISFACCION'])
+    grupo_previo = int(registro_actual["GRUPO DE SERVICIO"])
+    servicio_previo = str(registro_actual["SERVICIO"])
+    sexo_previo = str(registro_actual["SEXO"])
+    minutos_previos = float(registro_actual["Minutos"])
+    sat_previa = str(registro_actual["SATISFACCION"])
 
     st.markdown("---")
     st.subheader(f"Modificando Registro #{id_registro}")
 
-    with st.form("form_editar"):
+    with st.container(border=True):
         idx_grupo = 0 if grupo_previo == 1 else 1
-        nuevo_grupo = st.radio("Tipo de servicio:",
-                               ["Grupo 1 (Copias/Impresiones)", "Grupo 2 (Trámites/Pasaporte)"],
-                               index=idx_grupo)
+        nuevo_grupo = st.radio(
+            "Tipo de servicio:",
+            [
+                "Grupo 1: Servicios de atención rápida",
+                "Grupo 2: Servicios de gestión documental",
+            ],
+            index=idx_grupo,
+            key=f"edit_grupo_{id_registro}",
+        )
+        nuevo_grupo_num = 1 if "Grupo 1" in nuevo_grupo else 2
 
-        nuevo_servicio = st.text_input("Servicio exacto:", value=servicio_previo)
+        opciones_edicion = list(SERVICIOS_POR_GRUPO[nuevo_grupo_num])
+        if servicio_previo and servicio_previo not in opciones_edicion:
+            opciones_edicion.insert(0, servicio_previo)
 
-        idx_sexo = 0 if sexo_previo.upper() == "F" else 1
-        nuevo_sexo = st.radio("Sexo del cliente:", ["F", "M"], index=idx_sexo, horizontal=True)
+        idx_servicio = (
+            opciones_edicion.index(servicio_previo)
+            if servicio_previo in opciones_edicion
+            else 0
+        )
+        nuevo_servicio_sel = st.selectbox(
+            "Servicio exacto:",
+            options=opciones_edicion,
+            index=idx_servicio,
+            key=f"edit_servicio_{id_registro}_g{nuevo_grupo_num}",
+        )
 
-        nuevo_tiempo = st.number_input("Minutos de demora:", min_value=0.1, value=minutos_previos, step=0.5)
+        if "Otro" in nuevo_servicio_sel:
+            nuevo_servicio_custom = st.text_input(
+                "Especifica el servicio:",
+                key=f"edit_otro_{id_registro}",
+            )
+            nuevo_servicio_final = nuevo_servicio_custom.strip()
+        else:
+            nuevo_servicio_final = nuevo_servicio_sel
 
-        idx_sat = 0 if es_optimo(pd.Series([sat_previa]))[0] else 1
-        nueva_satisfaccion = st.radio("Satisfacción del cliente:",
-                                      ["Sí, OPTIMO 😊", "NO, hubo molestias 😞"],
-                                      index=idx_sat)
+        with st.form("form_editar"):
+            idx_sexo = 0 if sexo_previo.upper() == "F" else 1
+            nuevo_sexo = st.radio(
+                "Sexo del cliente:", ["F", "M"], index=idx_sexo, horizontal=True
+            )
 
-        guardar_cambios = st.form_submit_button("Actualizar Registro en la Nube 💾", use_container_width=True)
+            nuevo_tiempo = st.number_input(
+                "Minutos de demora:", min_value=0.1, value=minutos_previos, step=0.5
+            )
+
+            idx_sat = 0 if es_optimo(pd.Series([sat_previa]))[0] else 1
+            nueva_satisfaccion = st.radio(
+                "Satisfacción del cliente:",
+                ["Sí, OPTIMO 😊", "NO, hubo molestias 😞"],
+                index=idx_sat,
+            )
+
+            guardar_cambios = st.form_submit_button(
+                "Actualizar Registro en la Nube 💾", use_container_width=True
+            )
 
     if guardar_cambios:
-        try:
-            actualizar_registro(
-                id_registro=id_registro,
-                grupo=1 if "Grupo 1" in nuevo_grupo else 2,
-                servicio=nuevo_servicio.strip() if nuevo_servicio.strip() else "Varios",
-                sexo=nuevo_sexo,
-                minutos=nuevo_tiempo,
-                satisfaccion='OPTIMO' if "Sí" in nueva_satisfaccion else 'REGULAR',
-            )
-            st.success(f"¡Registro #{id_registro} actualizado correctamente!")
-            st.rerun()
-        except Exception as e:
-            st.error(f"Error al actualizar el registro: {e}")
+        if "Otro" in nuevo_servicio_sel and not nuevo_servicio_final:
+            st.warning("⚠️ Por favor especifica el nombre del servicio.")
+        else:
+            try:
+                actualizar_registro(
+                    id_registro=id_registro,
+                    grupo=nuevo_grupo_num,
+                    servicio=nuevo_servicio_final,
+                    sexo=nuevo_sexo,
+                    minutos=nuevo_tiempo,
+                    satisfaccion="OPTIMO" if "Sí" in nueva_satisfaccion else "REGULAR",
+                )
+                st.success(f"¡Registro #{id_registro} actualizado correctamente!")
+                st.rerun()
+            except Exception as e:
+                st.error(f"Error al actualizar el registro: {e}")
 
 
 @st.fragment(run_every=REFRESCO)
