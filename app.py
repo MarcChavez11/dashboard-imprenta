@@ -11,6 +11,7 @@ import numpy as np
 from sqlalchemy import text
 
 import os
+import base64
 
 
 # ----------------------------------------------------------------------
@@ -43,10 +44,39 @@ st.markdown("""
 </style>
 """, unsafe_allow_html=True)
 
-if logo_path:
-    st.sidebar.image(logo_path, width=220)
+def mostrar_logo_sidebar(ruta_logo):
+    if not ruta_logo:
+        return
 
-st.sidebar.title("Imprenta Flores")
+    ext = os.path.splitext(ruta_logo)[1].lower().replace(".", "")
+    mime = "jpeg" if ext in ["jpg", "jpeg"] else "png"
+
+    with open(ruta_logo, "rb") as f:
+        img_b64 = base64.b64encode(f.read()).decode()
+
+    st.sidebar.markdown(
+        f"""
+        <div style="
+            background: linear-gradient(145deg, #F4F5F7, #E2E5EA);
+            border: 2px solid #9CA3AF;
+            border-radius: 14px;
+            padding: 14px 16px;
+            margin-bottom: 14px;
+            text-align: center;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+        ">
+            <img src="data:image/{mime};base64,{img_b64}"
+                 alt="Logo Imprenta Flores"
+                 style="width: 100%; max-width: 215px; height: auto; display: block; margin: 0 auto;">
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+mostrar_logo_sidebar(logo_path)
+
+
+st.sidebar.caption("Panel de Control y Atención")
 menu = st.sidebar.radio("¿Qué deseas hacer?", [
     "⏱️ Registrar un cliente",
     "✏️ Editar un registro",
